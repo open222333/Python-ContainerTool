@@ -1,0 +1,38 @@
+summary: 樣本
+description: 樣本範例
+parameters:
+  - name: domain
+    in: path
+    type: string
+    required: true
+responses:
+  200_match:
+    description: 成功，返回訊息
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+        result:
+          type: string
+          example: "{domain} 符合域名格式"
+  200_no_match:
+    description: 成功，返回訊息
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+        result:
+          type: string
+          example: "{domain} 不符合域名格式"
+  500:
+    description: 發生錯誤，返回訊息
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+        result:
+          type: string
+          example: "發生錯誤 {錯誤說明}"

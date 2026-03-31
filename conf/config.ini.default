@@ -1,0 +1,16 @@
+[LOG]
+; 關閉log功能 輸入選項 (true, True, 1) 預設 不關閉
+; LOG_DISABLE=1
+
+; logs路徑 預設 logs
+; LOG_PATH=
+
+; 關閉紀錄log檔案 輸入選項 (true, True, 1)  預設 不關閉
+; LOG_FILE_DISABLE=1
+
+; 設定紀錄log等級 DEBUG,INFO,WARNING,ERROR,CRITICAL 預設WARNING
+; LOG_LEVEL=
+
+[SETTING]
+; flask json 設定檔路徑 預設值 conf/flask.json
+; FLASK_JSON_PATH=
