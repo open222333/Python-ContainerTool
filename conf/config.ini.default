@@ -1,3 +1,21 @@
+[SSH]
+; SSH 使用者 預設 root
+SSH_USER=root
+
+; SSH 私鑰路徑 (優先使用金鑰，與 SSH_PASSWORD 擇一)
+; 本機執行: SSH_KEY_PATH=~/.ssh/id_rsa
+; Docker 執行: SSH_KEY_PATH=ssh/id_rsa
+; SSH_KEY_PATH=ssh/id_rsa
+
+; SSH 密碼 (無私鑰時使用)
+; SSH_PASSWORD=
+
+; SSH port 預設 22
+; SSH_PORT=22
+
+; SSH 連線逾時秒數 預設 10
+; SSH_TIMEOUT=10
+
 [LOG]
 ; 關閉log功能 輸入選項 (true, True, 1) 預設 不關閉
 ; LOG_DISABLE=1
@@ -5,12 +23,15 @@
 ; logs路徑 預設 logs
 ; LOG_PATH=
 
-; 關閉紀錄log檔案 輸入選項 (true, True, 1)  預設 不關閉
-; LOG_FILE_DISABLE=1
-
 ; 設定紀錄log等級 DEBUG,INFO,WARNING,ERROR,CRITICAL 預設WARNING
 ; LOG_LEVEL=
 
-[SETTING]
-; flask json 設定檔路徑 預設值 conf/flask.json
-; FLASK_JSON_PATH=
+; 關閉紀錄log檔案 輸入選項 (true, True, 1) 預設 關閉
+; LOG_FILE_DISABLE=1
+
+[MONGO]
+; MongoDB 連線 URI 預設 mongodb://localhost:27017
+MONGO_URI=mongodb://localhost:27017
+
+; MongoDB 資料庫名稱 預設 container_tool
+MONGO_DB=container_tool

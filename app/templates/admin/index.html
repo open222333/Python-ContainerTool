@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContainerTool 後台</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background-color: #f5f6fa; }
+    #page-login { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+    .login-card { border: none; border-radius: 12px; }
+    .table code { font-size: .85em; }
+
+    /* Sidebar layout */
+    #page-dashboard { display: none; flex-direction: column; height: 100vh; }
+    .top-navbar { flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+    .main-body { display: flex; flex: 1; overflow: hidden; }
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: #1e2130;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar .nav-link {
+      color: #9aa0b4;
+      padding: .65rem 1.25rem;
+      border-radius: 0;
+      font-size: .9rem;
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      transition: background .15s, color .15s;
+    }
+    .sidebar .nav-link:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .sidebar .nav-link.active { background: rgba(99,132,255,.15); color: #6384ff; font-weight: 600; }
+    .sidebar .nav-section {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #555e7a;
+      padding: 1.1rem 1.25rem .4rem;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid rgba(255,255,255,.07);
+      font-size: .85rem;
+      color: #9aa0b4;
+    }
+    .content-area { flex: 1; overflow-y: auto; padding: 1.75rem; }
+
+    /* Mobile responsive */
+    .hamburger-btn { display: none; }
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 1040;
+    }
+    @media (max-width: 767px) {
+      .login-card { width: min(360px, 92vw) !important; }
+      .hamburger-btn { display: flex; }
+      .sidebar {
+        position: fixed;
+        top: 0; left: 0;
+        width: 260px;
+        height: 100vh;
+        z-index: 1050;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-backdrop.open { display: block; }
+      .content-area { padding: 1rem .75rem; }
+      .top-navbar { padding-left: .75rem !important; padding-right: .75rem !important; }
+
+      /* Larger buttons on mobile */
+      .btn-sm {
+        padding: .45rem .85rem !important;
+        font-size: .9rem !important;
+      }
+      .sidebar .nav-link {
+        padding: .85rem 1.25rem !important;
+        font-size: 1rem !important;
+      }
+      .btn { min-height: 2.5rem; }
+      .table td, .table th { padding: .65rem .5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== Login ===== -->
+<div id="page-login" class="align-items-center justify-content-center vh-100" style="display:flex">
+  <div class="card shadow-lg login-card" style="width:360px">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-hdd-network fs-1 text-primary"></i>
+        <h5 class="mt-2 fw-bold">ContainerTool 後台</h5>
+      </div>
+      <div id="login-error" class="alert alert-danger d-none py-2"></div>
+      <form id="form-login">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">帳號</label>
+          <input type="text" class="form-control" id="input-username" autocomplete="username" required>
+        </div>
+        <div class="mb-4">
+          <label class="form-label small fw-semibold">密碼</label>
+          <input type="password" class="form-control" id="input-password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100" id="btn-login">登入</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Dashboard ===== -->
+<div id="page-dashboard">
+
+  <!-- Top Navbar -->
+  <nav class="navbar navbar-dark bg-dark px-4 top-navbar">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-secondary hamburger-btn" onclick="toggleSidebar()" aria-label="選單">
+        <i class="bi bi-list fs-5"></i>
+      </button>
+      <span class="navbar-brand fw-bold mb-0"><i class="bi bi-hdd-network me-2"></i>ContainerTool</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-person-circle text-white-50 d-none d-sm-inline"></i>
+      <span class="text-white-50 small" id="nav-username"></span>
+      <button class="btn btn-outline-danger btn-sm ms-2" onclick="logout()">
+        <i class="bi bi-box-arrow-right me-1"></i><span class="d-none d-sm-inline">登出</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Sidebar backdrop (mobile) -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+  <div class="main-body">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="d-flex align-items-center justify-content-between px-3 pt-3 pb-1 d-md-none">
+        <span class="text-white-50 small fw-semibold">選單</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="closeSidebar()"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="nav-section">管理</div>
+      <a class="nav-link active" id="nav-hosts" onclick="switchTab('hosts')" href="#">
+        <i class="bi bi-server"></i>主機管理
+      </a>
+      <a class="nav-link" id="nav-users" onclick="switchTab('users')" href="#">
+        <i class="bi bi-people"></i>使用者管理
+      </a>
+      <a class="nav-link" id="nav-logs" onclick="switchTab('logs')" href="#">
+        <i class="bi bi-journal-text"></i>重啟紀錄
+      </a>
+      <a class="nav-link" id="nav-reboot-logs" onclick="switchTab('reboot-logs')" href="#">
+        <i class="bi bi-pc-display"></i>重開機紀錄
+      </a>
+      <div class="sidebar-footer">
+        <i class="bi bi-circle-fill text-success me-1" style="font-size:.5rem"></i>服務運行中
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <div class="content-area">
+
+      <!-- Hosts Tab -->
+      <div id="tab-hosts">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-server me-2 text-primary"></i>主機管理</h5>
+          <button class="btn btn-primary btn-sm" id="btn-add-host" onclick="openAddHost()">
+            <i class="bi bi-plus-lg me-1"></i>新增主機
+          </button>
+        </div>
+
+        <div id="hosts-alert" class="alert d-none py-2"></div>
+
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-0">
+            <div style="overflow-x:auto">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">名稱</th>
+                  <th>主機 IP</th>
+                  <th style="width:190px" class="pe-3">操作</th>
+                </tr>
+              </thead>
+              <tbody id="hosts-tbody">
+                <tr><td colspan="3" class="text-center py-4 text-muted">載入中...</td></tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Tab -->
+      <div id="tab-users" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-people me-2 text-primary"></i>使用者管理</h5>
+          <button class="btn btn-primary btn-sm" id="btn-add-user" onclick="openAddUser()">
+            <i class="bi bi-plus-lg me-1"></i>新增使用者
+          </button>
+        </div>
+
+        <div id="users-alert" class="alert d-none py-2"></div>
+
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-0">
+            <div style="overflow-x:auto">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">帳號</th>
+                  <th>角色</th>
+                  <th>建立時間</th>
+                  <th style="width:160px" class="pe-3">操作</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody">
+                <tr><td colspan="4" class="text-center py-4 text-muted">載入中...</td></tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs Tab -->
+      <div id="tab-logs" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-journal-text me-2 text-primary"></i>重啟紀錄</h5>
+          <button class="btn btn-outline-secondary btn-sm" onclick="loadLogs()">
+            <i class="bi bi-arrow-clockwise me-1"></i>重新整理
+          </button>
+        </div>
+
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-0">
+            <div style="overflow-x:auto">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">時間</th>
+                  <th>操作者</th>
+                  <th>主機</th>
+                  <th>容器</th>
+                  <th>結果</th>
+                  <th class="pe-3">失敗原因</th>
+                </tr>
+              </thead>
+              <tbody id="logs-tbody">
+                <tr><td colspan="6" class="text-center py-4 text-muted">載入中...</td></tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reboot Logs Tab -->
+      <div id="tab-reboot-logs" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-pc-display me-2 text-primary"></i>重開機紀錄</h5>
+          <button class="btn btn-outline-secondary btn-sm" onclick="loadRebootLogs()">
+            <i class="bi bi-arrow-clockwise me-1"></i>重新整理
+          </button>
+        </div>
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-0">
+            <div style="overflow-x:auto">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">時間</th>
+                  <th>操作者</th>
+                  <th>主機</th>
+                  <th>結果</th>
+                  <th class="pe-3">失敗原因</th>
+                </tr>
+              </thead>
+              <tbody id="reboot-logs-tbody">
+                <tr><td colspan="5" class="text-center py-4 text-muted">載入中...</td></tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content-area -->
+  </div><!-- /main-body -->
+</div>
+
+<!-- ===== Add/Edit Host Modal ===== -->
+<div class="modal fade" id="modal-host" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-host-title">新增主機</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="host-form-error" class="alert alert-danger d-none py-2"></div>
+        <form id="form-host">
+          <input type="hidden" id="host-id">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label small fw-semibold">名稱 <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="host-name" required>
+            </div>
+            <div class="col-8">
+              <label class="form-label small fw-semibold">主機 IP / Hostname <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="host-host" required>
+            </div>
+            <div class="col-4">
+              <label class="form-label small fw-semibold">SSH Port</label>
+              <input type="number" class="form-control" id="host-ssh_port" value="22">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">SSH 使用者 <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="host-ssh_user" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">SSH 私鑰路徑</label>
+              <input type="text" class="form-control" id="host-ssh_key_path" placeholder="~/.ssh/id_rsa">
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">SSH 密碼</label>
+              <input type="password" class="form-control" id="host-ssh_password">
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">描述</label>
+              <input type="text" class="form-control" id="host-description">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-save-host" onclick="saveHost()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Containers Modal ===== -->
+<div class="modal fade" id="modal-containers" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-containers-title">容器列表</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="containers-alert" class="alert d-none py-2"></div>
+        <div class="d-flex align-items-center gap-2 mb-2" id="batch-toolbar" style="display:none!important">
+          <span class="text-muted small">已選 <span id="selected-count">0</span> 個</span>
+          <button class="btn btn-warning btn-sm" id="btn-batch-restart" onclick="batchRestart()" disabled>
+            <i class="bi bi-arrow-clockwise me-1"></i>批次重啟
+          </button>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:36px"><input type="checkbox" id="check-all" onchange="toggleCheckAll(this)"></th>
+              <th>Container ID</th>
+              <th>名稱</th>
+              <th>Image</th>
+              <th>狀態</th>
+              <th style="width:120px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="containers-tbody">
+            <tr><td colspan="6" class="text-center py-4 text-muted">載入中...</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Add/Edit User Modal ===== -->
+<div class="modal fade" id="modal-user" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-user-title">新增使用者</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="user-form-error" class="alert alert-danger d-none py-2"></div>
+        <form id="form-user">
+          <input type="hidden" id="user-id">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">帳號 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="user-username" autocomplete="off" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" id="user-password-label">密碼 <span class="text-danger">*</span></label>
+            <input type="password" class="form-control" id="user-password" autocomplete="new-password">
+            <div class="form-text d-none" id="user-password-hint">留空則不修改密碼</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">角色 <span class="text-danger">*</span></label>
+            <select class="form-select" id="user-role">
+              <option value="viewer">檢視者 — 只能查看</option>
+              <option value="operator">操作員 — 可管理主機與容器</option>
+              <option value="admin">管理員 — 完整權限</option>
+            </select>
+          </div>
+          <div class="mb-1" id="user-password-confirm-wrap">
+            <label class="form-label small fw-semibold">確認密碼 <span class="text-danger">*</span></label>
+            <input type="password" class="form-control" id="user-password-confirm" autocomplete="new-password">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-save-user" onclick="saveUser()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Confirm Delete Modal ===== -->
+<div class="modal fade" id="modal-confirm" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-1"></i>確認刪除</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        確定要刪除主機 <strong id="confirm-host-name"></strong>？
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btn-confirm-delete">刪除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Confirm Reboot Modal ===== -->
+<div class="modal fade" id="modal-reboot" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title text-warning"><i class="bi bi-power me-1"></i>確認重開機</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        確定要重開主機 <strong id="reboot-host-name"></strong>？<br>
+        <small class="text-muted">重開機後主機上的容器將短暫停止服務。</small>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-warning btn-sm" id="btn-confirm-reboot">重開機</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const TOKEN_KEY = 'ct_token';
+const USERNAME_KEY = 'ct_username';
+const ROLE_KEY = 'ct_role';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function getRole() { return localStorage.getItem(ROLE_KEY) || 'viewer'; }
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USERNAME_KEY);
+  localStorage.removeItem(ROLE_KEY);
+}
+function can(action) {
+  const role = getRole();
+  const perms = {
+    admin:    ['host:read','host:write','host:reboot','container:read','container:restart','user:read','user:write'],
+    operator: ['host:read','host:write','container:read','container:restart'],
+    viewer:   ['host:read','container:read'],
+  };
+  return (perms[role] || []).includes(action);
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(path, { headers: authHeaders(), ...options });
+  if (res.status === 401) {
+    clearToken();
+    document.getElementById('login-error').textContent = 'Token 已過期，請重新登入';
+    document.getElementById('login-error').classList.remove('d-none');
+    showLogin();
+    return null;
+  }
+  return res;
+}
+
+// --- Pages ---
+function showLogin() {
+  document.getElementById('page-login').style.display = 'flex';
+  document.getElementById('page-dashboard').style.display = 'none';
+}
+
+function showDashboard() {
+  document.getElementById('page-login').style.display = 'none';
+  document.getElementById('page-dashboard').style.display = 'flex';
+
+  const role = getRole();
+  const roleLabels = { admin: '管理員', operator: '操作員', viewer: '檢視者' };
+  const roleColors = { admin: 'danger', operator: 'warning', viewer: 'secondary' };
+  document.getElementById('nav-username').innerHTML =
+    `${escHtml(localStorage.getItem(USERNAME_KEY) || '')} <span class="badge bg-${roleColors[role]}">${roleLabels[role] || role}</span>`;
+
+  // 依權限顯示/隱藏 sidebar 項目與按鈕
+  document.getElementById('nav-users').style.display = can('user:read') ? '' : 'none';
+  document.getElementById('nav-reboot-logs').style.display = can('host:reboot') ? '' : 'none';
+  document.getElementById('btn-add-host').style.display = can('host:write') ? '' : 'none';
+  document.getElementById('btn-add-user').style.display = can('user:write') ? '' : 'none';
+
+  switchTab('hosts');
+}
+
+function logout() {
+  clearToken();
+  showLogin();
+}
+
+// --- Login ---
+document.getElementById('form-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-login');
+  const errEl = document.getElementById('login-error');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>登入中...';
+  errEl.classList.add('d-none');
+
+  const username = document.getElementById('input-username').value;
+  const password = document.getElementById('input-password').value;
+
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (data.success) {
+      setToken(data.token);
+      localStorage.setItem(USERNAME_KEY, username);
+      localStorage.setItem(ROLE_KEY, data.role || 'viewer');
+      showDashboard();
+    } else {
+      errEl.textContent = data.message || '帳號或密碼錯誤';
+      errEl.classList.remove('d-none');
+    }
+  } catch {
+    errEl.textContent = '連線失敗，請確認服務是否啟動';
+    errEl.classList.remove('d-none');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '登入';
+});
+
+// --- Hosts ---
+let hostsData = [];
+
+async function loadHosts() {
+  const tbody = document.getElementById('hosts-tbody');
+  tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>載入中...</td></tr>';
+  const res = await apiFetch('/host/');
+  if (!res) return;
+  const data = await res.json();
+  hostsData = data.data || [];
+  renderHosts();
+}
+
+function renderHosts() {
+  const tbody = document.getElementById('hosts-tbody');
+  if (!hostsData.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted">尚無主機，點選「新增主機」開始</td></tr>';
+    return;
+  }
+  tbody.innerHTML = hostsData.map(h => `
+    <tr>
+      <td class="ps-3 fw-semibold">${escHtml(h.name)}</td>
+      <td><code>${escHtml(h.host)}</code></td>
+      <td class="pe-3">
+        ${can('container:read') ? `<button class="btn btn-sm btn-outline-info me-1" onclick="openContainers('${h._id}', '${escAttr(h.name)}')"><i class="bi bi-grid-3x3-gap"></i> 容器</button>` : ''}
+        ${can('host:write') ? `<button class="btn btn-sm btn-outline-secondary me-1" onclick="openEditHost('${h._id}')"><i class="bi bi-pencil"></i></button>` : ''}
+        ${can('host:reboot') ? `<button class="btn btn-sm btn-outline-warning me-1" onclick="openRebootHost('${h._id}', '${escAttr(h.name)}')"><i class="bi bi-power"></i></button>` : ''}
+        ${can('host:write') ? `<button class="btn btn-sm btn-outline-danger" onclick="openDeleteHost('${h._id}', '${escAttr(h.name)}')"><i class="bi bi-trash"></i></button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+// --- Add / Edit Host ---
+let hostModalInstance = null;
+
+function openAddHost() {
+  document.getElementById('modal-host-title').textContent = '新增主機';
+  document.getElementById('host-id').value = '';
+  document.getElementById('form-host').reset();
+  document.getElementById('host-ssh_port').value = '22';
+  document.getElementById('host-form-error').classList.add('d-none');
+  getHostModal().show();
+}
+
+function openEditHost(id) {
+  const h = hostsData.find(x => x._id === id);
+  if (!h) return;
+  document.getElementById('modal-host-title').textContent = '編輯主機';
+  document.getElementById('host-id').value = h._id;
+  document.getElementById('host-name').value = h.name || '';
+  document.getElementById('host-host').value = h.host || '';
+  document.getElementById('host-ssh_port').value = h.ssh_port || 22;
+  document.getElementById('host-ssh_user').value = h.ssh_user || '';
+  document.getElementById('host-ssh_key_path').value = h.ssh_key_path || '';
+  document.getElementById('host-ssh_password').value = '';
+  document.getElementById('host-description').value = h.description || '';
+  document.getElementById('host-form-error').classList.add('d-none');
+  getHostModal().show();
+}
+
+function getHostModal() {
+  if (!hostModalInstance) hostModalInstance = new bootstrap.Modal(document.getElementById('modal-host'));
+  return hostModalInstance;
+}
+
+async function saveHost() {
+  const id = document.getElementById('host-id').value;
+  const errEl = document.getElementById('host-form-error');
+  const btn = document.getElementById('btn-save-host');
+  errEl.classList.add('d-none');
+  btn.disabled = true;
+
+  const payload = {
+    name: document.getElementById('host-name').value,
+    host: document.getElementById('host-host').value,
+    ssh_user: document.getElementById('host-ssh_user').value,
+    ssh_port: parseInt(document.getElementById('host-ssh_port').value) || 22,
+    ssh_key_path: document.getElementById('host-ssh_key_path').value || null,
+    ssh_password: document.getElementById('host-ssh_password').value || null,
+    description: document.getElementById('host-description').value,
+  };
+
+  try {
+    const res = await apiFetch(id ? `/host/${id}` : '/host/', {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (data.success) {
+      bootstrap.Modal.getInstance(document.getElementById('modal-host')).hide();
+      loadHosts();
+    } else {
+      errEl.textContent = data.message || '儲存失敗';
+      errEl.classList.remove('d-none');
+    }
+  } catch {
+    errEl.textContent = '連線失敗';
+    errEl.classList.remove('d-none');
+  }
+  btn.disabled = false;
+}
+
+// --- Delete Host ---
+let deleteTargetId = null;
+
+function openDeleteHost(id, name) {
+  deleteTargetId = id;
+  document.getElementById('confirm-host-name').textContent = name;
+  new bootstrap.Modal(document.getElementById('modal-confirm')).show();
+}
+
+document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
+  const modal = bootstrap.Modal.getInstance(document.getElementById('modal-confirm'));
+  if (deleteTargetId) {
+    const res = await apiFetch(`/host/${deleteTargetId}`, { method: 'DELETE' });
+    modal.hide();
+    if (res) loadHosts();
+    deleteTargetId = null;
+  } else if (deleteUserTargetId) {
+    const res = await apiFetch(`/user/${deleteUserTargetId}`, { method: 'DELETE' });
+    modal.hide();
+    if (res) {
+      const data = await res.json();
+      if (!data.success) {
+        const alertEl = document.getElementById('users-alert');
+        alertEl.className = 'alert alert-danger py-2';
+        alertEl.textContent = data.message || '刪除失敗';
+        alertEl.classList.remove('d-none');
+        setTimeout(() => alertEl.classList.add('d-none'), 3000);
+      }
+      loadUsers();
+    }
+    deleteUserTargetId = null;
+  }
+});
+
+// --- Containers ---
+let currentHostId = null;
+
+async function openContainers(hostId, hostName) {
+  currentHostId = hostId;
+  document.getElementById('modal-containers-title').textContent = `容器列表 — ${hostName}`;
+  document.getElementById('containers-tbody').innerHTML =
+    '<tr><td colspan="6" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>連線中...</td></tr>';
+  document.getElementById('containers-alert').classList.add('d-none');
+  document.getElementById('check-all').checked = false;
+  updateBatchToolbar();
+  new bootstrap.Modal(document.getElementById('modal-containers')).show();
+  await loadContainers(hostId);
+}
+
+async function loadContainers(hostId) {
+  const tbody = document.getElementById('containers-tbody');
+  const res = await apiFetch(`/host/${hostId}/containers`);
+  if (!res) return;
+  const data = await res.json();
+
+  if (!data.success) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>連線失敗</td></tr>`;
+    return;
+  }
+  const containers = data.data || [];
+  if (!containers.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">此主機無容器</td></tr>';
+    return;
+  }
+  document.getElementById('check-all').checked = false;
+  updateBatchToolbar();
+  tbody.innerHTML = containers.map(c => {
+    const isRunning = (c.state || '').toLowerCase() === 'running';
+    const badge = isRunning
+      ? '<span class="badge bg-success-subtle text-success border border-success-subtle">running</span>'
+      : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">stopped</span>';
+    return `
+      <tr>
+        <td><input type="checkbox" class="container-check" value="${escAttr(c.name)}" onchange="updateBatchToolbar()"></td>
+        <td><code class="text-muted">${escHtml((c.id || '').substring(0, 12))}</code></td>
+        <td class="fw-semibold">${escHtml(c.name)}</td>
+        <td><small class="text-muted">${escHtml(c.image)}</small></td>
+        <td>${badge}<small class="text-muted ms-2">${escHtml(c.status)}</small></td>
+        <td>
+          ${can('container:restart') ? `<button class="btn btn-sm btn-outline-warning" id="restart-${escAttr(c.name)}" onclick="restartContainer('${hostId}', '${escAttr(c.name)}')"><i class="bi bi-arrow-clockwise"></i> 重啟</button>` : '—'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function toggleCheckAll(el) {
+  document.querySelectorAll('.container-check').forEach(c => c.checked = el.checked);
+  updateBatchToolbar();
+}
+
+function updateBatchToolbar() {
+  const checked = document.querySelectorAll('.container-check:checked');
+  const toolbar = document.getElementById('batch-toolbar');
+  const btn = document.getElementById('btn-batch-restart');
+  document.getElementById('selected-count').textContent = checked.length;
+  if (can('container:restart')) {
+    toolbar.style.display = checked.length > 0 ? 'flex' : 'none';
+    btn.disabled = checked.length === 0;
+  }
+}
+
+async function batchRestart() {
+  const names = [...document.querySelectorAll('.container-check:checked')].map(c => c.value);
+  if (!names.length || !currentHostId) return;
+
+  const btn = document.getElementById('btn-batch-restart');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>重啟中...';
+
+  const res = await apiFetch(`/host/${currentHostId}/containers/batch-restart`, {
+    method: 'POST',
+    body: JSON.stringify({ containers: names })
+  });
+
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>批次重啟';
+
+  if (res) {
+    const data = await res.json();
+    const results = data.results || [];
+    const failed = results.filter(r => !r.success);
+    const alertEl = document.getElementById('containers-alert');
+    if (failed.length === 0) {
+      alertEl.className = 'alert alert-success py-2';
+      alertEl.textContent = `${results.length} 個容器重啟成功`;
+    } else {
+      alertEl.className = 'alert alert-warning py-2';
+      alertEl.innerHTML = `${results.length - failed.length} 成功，${failed.length} 失敗：` +
+        failed.map(r => `<br><b>${escHtml(r.container)}</b>: ${escHtml(r.reason)}`).join('');
+    }
+    alertEl.classList.remove('d-none');
+    await loadContainers(currentHostId);
+  }
+}
+
+async function restartContainer(hostId, containerName) {
+  const btn = document.getElementById(`restart-${containerName}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+
+  const res = await apiFetch(`/host/${hostId}/containers/${containerName}/restart`, { method: 'POST' });
+  if (res) {
+    const data = await res.json();
+    const alertEl = document.getElementById('containers-alert');
+    alertEl.className = `alert ${data.success ? 'alert-success' : 'alert-danger'} py-2`;
+    alertEl.textContent = data.success ? `${containerName} 重啟成功` : `${containerName} 重啟失敗：${data.reason || ''}`;
+    alertEl.classList.remove('d-none');
+    await loadContainers(hostId);
+  }
+}
+
+// --- Sidebar toggle (mobile) ---
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-backdrop').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-backdrop').classList.remove('open');
+}
+
+// --- Tab switch ---
+function switchTab(tab) {
+  ['hosts', 'users', 'logs', 'reboot-logs'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('d-none', tab !== t);
+    document.getElementById(`nav-${t}`).classList.toggle('active', tab === t);
+  });
+  closeSidebar();
+  if (tab === 'hosts') loadHosts();
+  else if (tab === 'users') loadUsers();
+  else if (tab === 'logs') loadLogs();
+  else if (tab === 'reboot-logs') loadRebootLogs();
+}
+
+// --- Users ---
+let usersData = [];
+
+async function loadUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>載入中...</td></tr>';
+  const res = await apiFetch('/user/');
+  if (!res) return;
+  const data = await res.json();
+  usersData = data.data || [];
+  renderUsers();
+}
+
+function renderUsers() {
+  const tbody = document.getElementById('users-tbody');
+  const currentUsername = localStorage.getItem(USERNAME_KEY);
+  if (!usersData.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">尚無使用者</td></tr>';
+    return;
+  }
+  const roleLabels = { admin: '管理員', operator: '操作員', viewer: '檢視者' };
+  const roleColors = { admin: 'danger', operator: 'warning', viewer: 'secondary' };
+  tbody.innerHTML = usersData.map(u => {
+    const isSelf = u.username === currentUsername;
+    const createdAt = u.created_at ? new Date(u.created_at).toLocaleString('zh-TW') : '—';
+    const roleBadge = `<span class="badge bg-${roleColors[u.role] || 'secondary'}">${roleLabels[u.role] || u.role}</span>`;
+    return `
+      <tr>
+        <td class="ps-3 fw-semibold">
+          ${escHtml(u.username)}
+          ${isSelf ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">自己</span>' : ''}
+        </td>
+        <td>${roleBadge}</td>
+        <td class="text-muted small">${createdAt}</td>
+        <td class="pe-3">
+          <button class="btn btn-sm btn-outline-secondary me-1" onclick="openEditUser('${u._id}')">
+            <i class="bi bi-pencil"></i> 編輯
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="openDeleteUser('${u._id}', '${escAttr(u.username)}')" ${isSelf ? 'disabled' : ''}>
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openAddUser() {
+  document.getElementById('modal-user-title').textContent = '新增使用者';
+  document.getElementById('user-id').value = '';
+  document.getElementById('user-username').value = '';
+  document.getElementById('user-username').disabled = false;
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password-confirm').value = '';
+  document.getElementById('user-role').value = 'viewer';
+  document.getElementById('user-password-label').innerHTML = '密碼 <span class="text-danger">*</span>';
+  document.getElementById('user-password-hint').classList.add('d-none');
+  document.getElementById('user-password-confirm-wrap').classList.remove('d-none');
+  document.getElementById('user-form-error').classList.add('d-none');
+  getUserModal().show();
+}
+
+function openEditUser(id) {
+  const u = usersData.find(x => x._id === id);
+  if (!u) return;
+  document.getElementById('modal-user-title').textContent = '編輯使用者';
+  document.getElementById('user-id').value = u._id;
+  document.getElementById('user-username').value = u.username;
+  document.getElementById('user-username').disabled = true;
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password-confirm').value = '';
+  document.getElementById('user-role').value = u.role || 'viewer';
+  document.getElementById('user-password-label').innerHTML = '新密碼';
+  document.getElementById('user-password-hint').classList.remove('d-none');
+  document.getElementById('user-password-confirm-wrap').classList.remove('d-none');
+  document.getElementById('user-form-error').classList.add('d-none');
+  getUserModal().show();
+}
+
+function getUserModal() {
+  return bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-user'));
+}
+
+async function saveUser() {
+  const id = document.getElementById('user-id').value;
+  const errEl = document.getElementById('user-form-error');
+  const btn = document.getElementById('btn-save-user');
+  const password = document.getElementById('user-password').value;
+  const confirm = document.getElementById('user-password-confirm').value;
+  errEl.classList.add('d-none');
+
+  if (!id && !password) {
+    errEl.textContent = '密碼不得為空';
+    errEl.classList.remove('d-none');
+    return;
+  }
+  if (password && password !== confirm) {
+    errEl.textContent = '兩次密碼輸入不一致';
+    errEl.classList.remove('d-none');
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const role = document.getElementById('user-role').value;
+    let res;
+    if (id) {
+      const payload = { role };
+      if (password) payload.password = password;
+      res = await apiFetch(`/user/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      const username = document.getElementById('user-username').value.trim();
+      if (!username) {
+        errEl.textContent = '帳號不得為空';
+        errEl.classList.remove('d-none');
+        btn.disabled = false;
+        return;
+      }
+      res = await apiFetch('/user/', { method: 'POST', body: JSON.stringify({ username, password, role }) });
+    }
+    if (!res) return;
+    const data = await res.json();
+    if (data.success) {
+      getUserModal().hide();
+      loadUsers();
+    } else {
+      errEl.textContent = data.message || '儲存失敗';
+      errEl.classList.remove('d-none');
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- Delete User ---
+let deleteUserTargetId = null;
+
+function openDeleteUser(id, username) {
+  deleteUserTargetId = id;
+  document.getElementById('confirm-host-name').textContent = username;
+  new bootstrap.Modal(document.getElementById('modal-confirm')).show();
+}
+
+// --- Reboot Host ---
+let rebootTargetId = null;
+
+function openRebootHost(id, name) {
+  rebootTargetId = id;
+  document.getElementById('reboot-host-name').textContent = name;
+  new bootstrap.Modal(document.getElementById('modal-reboot')).show();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btn-confirm-reboot').addEventListener('click', async () => {
+    if (!rebootTargetId) return;
+    const btn = document.getElementById('btn-confirm-reboot');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>執行中...';
+
+    const res = await apiFetch(`/host/${rebootTargetId}/reboot`, { method: 'POST' });
+    bootstrap.Modal.getInstance(document.getElementById('modal-reboot')).hide();
+    btn.disabled = false;
+    btn.textContent = '重開機';
+
+    if (res) {
+      const data = await res.json();
+      const alertEl = document.getElementById('hosts-alert');
+      alertEl.className = `alert ${data.success ? 'alert-success' : 'alert-danger'} py-2`;
+      alertEl.textContent = data.success ? '重開機指令已送出' : `重開機失敗：${data.reason || ''}`;
+      alertEl.classList.remove('d-none');
+      setTimeout(() => alertEl.classList.add('d-none'), 5000);
+    }
+    rebootTargetId = null;
+  });
+});
+
+// --- Reboot Logs ---
+async function loadRebootLogs() {
+  const tbody = document.getElementById('reboot-logs-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>載入中...</td></tr>';
+  const res = await apiFetch('/log/reboot');
+  if (!res) return;
+  const data = await res.json();
+  const logs = data.data || [];
+  if (!logs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">尚無紀錄</td></tr>';
+    return;
+  }
+  tbody.innerHTML = logs.map(l => {
+    const time = l.created_at ? new Date(l.created_at).toLocaleString('zh-TW') : '—';
+    const badge = l.success
+      ? '<span class="badge bg-success">成功</span>'
+      : '<span class="badge bg-danger">失敗</span>';
+    return `
+      <tr>
+        <td class="ps-3 text-muted small">${time}</td>
+        <td class="fw-semibold">${escHtml(l.username)}</td>
+        <td><code>${escHtml(l.host_name)}</code> <small class="text-muted">${escHtml(l.host_ip)}</small></td>
+        <td>${badge}</td>
+        <td class="pe-3 text-danger small">${escHtml(l.reason || '—')}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// --- Logs ---
+async function loadLogs() {
+  const tbody = document.getElementById('logs-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>載入中...</td></tr>';
+  const res = await apiFetch('/log/restart');
+  if (!res) return;
+  const data = await res.json();
+  const logs = data.data || [];
+  if (!logs.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">尚無紀錄</td></tr>';
+    return;
+  }
+  tbody.innerHTML = logs.map(l => {
+    const time = l.created_at ? new Date(l.created_at).toLocaleString('zh-TW') : '—';
+    const badge = l.success
+      ? '<span class="badge bg-success">成功</span>'
+      : '<span class="badge bg-danger">失敗</span>';
+    return `
+      <tr>
+        <td class="ps-3 text-muted small">${time}</td>
+        <td class="fw-semibold">${escHtml(l.username)}</td>
+        <td><code>${escHtml(l.host_name)}</code> <small class="text-muted">${escHtml(l.host_ip)}</small></td>
+        <td>${escHtml(l.container_name)}</td>
+        <td>${badge}</td>
+        <td class="pe-3"><pre class="mb-0 text-danger small" style="white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto">${escHtml(l.reason || '—')}</pre></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// --- Utils ---
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(str) {
+  return String(str ?? '').replace(/'/g, "\\'");
+}
+
+// --- Init ---
+getToken() ? showDashboard() : showLogin();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+logs/
+conf/config.ini
+conf/flask.json
+.env
+ssh/
