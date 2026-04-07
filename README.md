@@ -444,3 +444,55 @@ JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 - `run.py` 使用 `TestingConfig` 啟動，預設 `debug=True`，僅適用於開發環境；正式部署請改用生產設定並關閉 debug 模式。
 - 正式部署建議使用 gunicorn 搭配 nginx 作為反向代理。
 - 主機的 `ssh_password` 欄位以明文存入 MongoDB，正式環境建議加密儲存或改用 SSH 金鑰認證。
+
+## 腳本
+
+### script/restricted_ssh_user.sh
+
+在遠端主機建立受限 SSH 用戶 `dockerop`，讓 ContainerTool 以最小權限透過 SSH 操作 Docker，適用於 Ubuntu / Debian / CentOS / RHEL。
+
+**用戶可執行的操作：**
+
+- `sudo docker ps` / `sudo docker ps -a`
+- `sudo docker restart <container>`
+- `sudo docker logs <container>`
+- `sudo reboot` / `sudo shutdown -r now`
+
+**使用方式：**
+
+```bash
+# 在遠端主機以 root 身份執行
+sudo bash script/restricted_ssh_user.sh
+```
+
+執行完畢後，腳本會提示設定 `dockerop` 的登入密碼。
+
+**連線測試：**
+
+```bash
+ssh dockerop@your-server-ip
+```
+
+**設計說明：**
+
+| 步驟 | 說明 |
+|------|------|
+| `/etc/shells` 註冊 | SSH 守護行程（sshd）會拒絕 Shell 不在此清單中的用戶；將 `/bin/rbash` 加入是連線成功的關鍵 |
+| `rbash` 受限環境 | 用戶 PATH 鎖定為 `~/bin`，只能執行白名單中的 `sudo`、`docker`，無法使用絕對路徑跳脫 |
+| `.bash_profile` 由 root 擁有 | 防止用戶在 rbash 內修改自身的 PATH 或環境變數 |
+| `ForceCommand /bin/rbash --login` | 確保 SSH 登入時強制讀取 `.bash_profile` 以套用 PATH 限制 |
+| SSHD 配置去重 | 使用 `sed` 先移除舊設定區塊，避免重複執行腳本產生衝突配置 |
+
+**除錯方式：**
+
+若執行完仍無法連線，在伺服器端觀察即時日誌：
+
+```bash
+# Ubuntu / Debian
+tail -f /var/log/auth.log
+
+# CentOS / RHEL
+tail -f /var/log/secure
+```
+
+同時嘗試 SSH 登入，日誌會顯示具體錯誤（`Permission denied` 或 `Invalid shell`）。
