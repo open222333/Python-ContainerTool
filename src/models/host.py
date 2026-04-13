@@ -41,7 +41,7 @@ class Host:
                 {'_id': ObjectId(host_id)},
                 {'$set': data}
             )
-            return result.modified_count > 0
+            return result.matched_count > 0
         except Exception:
             return False
 

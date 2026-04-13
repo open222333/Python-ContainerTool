@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ContainerTool 後台</title>
+  <title>{{ app_title }}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
   <style>
@@ -100,7 +100,7 @@
     <div class="card-body p-4">
       <div class="text-center mb-4">
         <i class="bi bi-hdd-network fs-1 text-primary"></i>
-        <h5 class="mt-2 fw-bold">ContainerTool 後台</h5>
+        <h5 class="mt-2 fw-bold">{{ app_title }}</h5>
       </div>
       <div id="login-error" class="alert alert-danger d-none py-2"></div>
       <form id="form-login">
@@ -127,7 +127,7 @@
       <button class="btn btn-sm btn-outline-secondary hamburger-btn" onclick="toggleSidebar()" aria-label="選單">
         <i class="bi bi-list fs-5"></i>
       </button>
-      <span class="navbar-brand fw-bold mb-0"><i class="bi bi-hdd-network me-2"></i>ContainerTool</span>
+      <span class="navbar-brand fw-bold mb-0"><i class="bi bi-hdd-network me-2"></i>{{ app_title }}</span>
     </div>
     <div class="d-flex align-items-center gap-2">
       <i class="bi bi-person-circle text-white-50 d-none d-sm-inline"></i>
@@ -160,6 +160,10 @@
       </a>
       <a class="nav-link" id="nav-reboot-logs" onclick="switchTab('reboot-logs')" href="#">
         <i class="bi bi-pc-display"></i>重開機紀錄
+      </a>
+      <div class="nav-section">工具</div>
+      <a class="nav-link" id="nav-tools" onclick="switchTab('tools')" href="#">
+        <i class="bi bi-tools"></i>SSH 金鑰產生
       </a>
       <div class="sidebar-footer">
         <i class="bi bi-circle-fill text-success me-1" style="font-size:.5rem"></i>服務運行中
@@ -294,6 +298,71 @@
         </div>
       </div>
 
+      <!-- Tools Tab -->
+      <div id="tab-tools" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-tools me-2 text-primary"></i>SSH 金鑰產生</h5>
+        </div>
+
+        <div class="row g-3">
+          <!-- Generate Form -->
+          <div class="col-12 col-md-5">
+            <div class="card shadow-sm border-0">
+              <div class="card-body">
+                <h6 class="fw-semibold mb-3"><i class="bi bi-key me-1 text-warning"></i>產生新金鑰</h6>
+                <div id="ssh-key-alert" class="alert d-none py-2"></div>
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold">私鑰檔名</label>
+                  <input type="text" class="form-control" id="ssh-key-name" value="id_rsa" placeholder="id_rsa">
+                  <div class="form-text">金鑰將存入 <code>ssh/</code> 目錄（例如 <code>ssh/id_rsa</code>）</div>
+                </div>
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="ssh-key-force">
+                    <label class="form-check-label small fw-semibold" for="ssh-key-force">強制覆蓋（若已存在）</label>
+                  </div>
+                </div>
+                <button class="btn btn-primary w-100" id="btn-gen-ssh-key" onclick="generateSshKey()">
+                  <i class="bi bi-plus-circle me-1"></i>產生金鑰
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Public Key Result -->
+          <div class="col-12 col-md-7">
+            <div class="card shadow-sm border-0" id="ssh-key-result-card" style="display:none">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="fw-semibold mb-0"><i class="bi bi-clipboard-check me-1 text-success"></i>公鑰內容</h6>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="copySshPublicKey()">
+                    <i class="bi bi-copy me-1"></i>複製
+                  </button>
+                </div>
+                <textarea class="form-control font-monospace" id="ssh-key-pubkey" rows="6" readonly
+                  style="font-size:.78rem;resize:none;background:#f8f9fa"></textarea>
+                <div class="mt-2 text-muted small">
+                  <i class="bi bi-info-circle me-1"></i>
+                  將上方公鑰加入遠端主機的 <code>~/.ssh/authorized_keys</code>，即可使用此金鑰連線。
+                </div>
+                <div class="mt-2">
+                  <span class="badge bg-secondary me-1"><i class="bi bi-lock me-1"></i>私鑰路徑</span>
+                  <code id="ssh-key-privpath" class="text-danger"></code>
+                </div>
+              </div>
+            </div>
+            <div class="card shadow-sm border-0 h-100" id="ssh-key-placeholder-card">
+              <div class="card-body d-flex align-items-center justify-content-center text-muted py-5">
+                <div class="text-center">
+                  <i class="bi bi-key fs-1 mb-2 d-block opacity-25"></i>
+                  <small>產生金鑰後，公鑰內容將顯示於此</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /content-area -->
   </div><!-- /main-body -->
 </div>
@@ -304,9 +373,13 @@
     <div class="modal-content border-0 shadow">
       <div class="modal-header">
         <h5 class="modal-title" id="modal-host-title">新增主機</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <a href="/admin/docs/restricted_ssh_user" target="_blank"
+           class="ms-2 text-muted small" title="如何設定受限 SSH 用戶">
+          <i class="bi bi-question-circle"></i>
+        </a>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="max-height:70vh;overflow-y:auto">
         <div id="host-form-error" class="alert alert-danger d-none py-2"></div>
         <form id="form-host">
           <input type="hidden" id="host-id">
@@ -323,21 +396,97 @@
               <label class="form-label small fw-semibold">SSH Port</label>
               <input type="number" class="form-control" id="host-ssh_port" value="22">
             </div>
-            <div class="col-6">
-              <label class="form-label small fw-semibold">SSH 使用者 <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" id="host-ssh_user" required>
-            </div>
-            <div class="col-6">
-              <label class="form-label small fw-semibold">SSH 私鑰路徑</label>
-              <input type="text" class="form-control" id="host-ssh_key_path" placeholder="~/.ssh/id_rsa">
-            </div>
-            <div class="col-12">
-              <label class="form-label small fw-semibold">SSH 密碼</label>
-              <input type="password" class="form-control" id="host-ssh_password">
-            </div>
             <div class="col-12">
               <label class="form-label small fw-semibold">描述</label>
               <input type="text" class="form-control" id="host-description">
+            </div>
+
+            <!-- 重啟主機帳號 -->
+            <div class="col-12">
+              <label class="form-label small fw-semibold mb-1">
+                <i class="bi bi-power me-1 text-warning"></i>重啟主機帳號 <span class="text-danger">*</span>
+              </label>
+              <div class="border rounded p-2">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label small mb-1">SSH 使用者 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="reboot-ssh_user" placeholder="root">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">SSH 私鑰路徑</label>
+                    <input type="text" class="form-control form-control-sm" id="reboot-ssh_key_path" placeholder="ssh/id_rsa">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small mb-1">SSH 密碼</label>
+                    <input type="password" class="form-control form-control-sm" id="reboot-ssh_password" autocomplete="new-password">
+                  </div>
+                  <div class="col-7">
+                    <div class="form-check mt-1">
+                      <input class="form-check-input" type="checkbox" id="reboot-is_root" checked>
+                      <label class="form-check-label small" for="reboot-is_root">Root 帳號（不需 sudo）</label>
+                    </div>
+                  </div>
+                  <div class="col-5">
+                    <label class="form-label small mb-1">連線模式</label>
+                    <div class="input-group input-group-sm">
+                      <select class="form-select form-select-sm" id="reboot-conn_type">
+                        <option value="standard">標準 SSH</option>
+                        <option value="restricted">受限指令</option>
+                      </select>
+                      <button type="button" class="btn btn-outline-secondary conn-type-help"
+                              data-bs-toggle="popover" data-bs-placement="left" data-bs-trigger="click"
+                              data-bs-html="true" data-bs-title="受限指令模式"
+                              data-bs-content="&lt;small&gt;透過 &lt;code&gt;authorized_keys&lt;/code&gt; 的 &lt;code&gt;command=&lt;/code&gt; 限制帳號只能執行白名單指令，連線時無法取得互動式 shell。&lt;br&gt;&lt;br&gt;&lt;b&gt;差異：&lt;/b&gt;&lt;ul class='ps-3 mb-1'&gt;&lt;li&gt;每次操作只送一道指令&lt;/li&gt;&lt;li&gt;列容器只顯示執行中（&lt;code&gt;docker ps&lt;/code&gt; 無 -a）&lt;/li&gt;&lt;li&gt;重啟後不做狀態確認&lt;/li&gt;&lt;/ul&gt;&lt;b&gt;建立受限帳號：&lt;/b&gt;&lt;br&gt;&lt;code&gt;sudo bash script/restricted_ssh_user.sh -u dockerop -k &quot;ssh-rsa ...&quot;&lt;/code&gt;&lt;/small&gt;">
+                        <i class="bi bi-question-circle"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 重啟容器帳號 -->
+            <div class="col-12">
+              <label class="form-label small fw-semibold mb-1">
+                <i class="bi bi-arrow-clockwise me-1 text-info"></i>重啟容器帳號 <span class="text-danger">*</span>
+              </label>
+              <div class="border rounded p-2">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label small mb-1">SSH 使用者 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="restart-ssh_user" placeholder="dockerop">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">SSH 私鑰路徑</label>
+                    <input type="text" class="form-control form-control-sm" id="restart-ssh_key_path" placeholder="ssh/id_rsa">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small mb-1">SSH 密碼</label>
+                    <input type="password" class="form-control form-control-sm" id="restart-ssh_password" autocomplete="new-password">
+                  </div>
+                  <div class="col-7">
+                    <div class="form-check mt-1">
+                      <input class="form-check-input" type="checkbox" id="restart-is_root">
+                      <label class="form-check-label small" for="restart-is_root">Root 帳號（不需 sudo）</label>
+                    </div>
+                  </div>
+                  <div class="col-5">
+                    <label class="form-label small mb-1">連線模式</label>
+                    <div class="input-group input-group-sm">
+                      <select class="form-select form-select-sm" id="restart-conn_type">
+                        <option value="standard">標準 SSH</option>
+                        <option value="restricted">受限指令</option>
+                      </select>
+                      <button type="button" class="btn btn-outline-secondary conn-type-help"
+                              data-bs-toggle="popover" data-bs-placement="left" data-bs-trigger="click"
+                              data-bs-html="true" data-bs-title="受限指令模式"
+                              data-bs-content="&lt;small&gt;透過 &lt;code&gt;authorized_keys&lt;/code&gt; 的 &lt;code&gt;command=&lt;/code&gt; 限制帳號只能執行白名單指令，連線時無法取得互動式 shell。&lt;br&gt;&lt;br&gt;&lt;b&gt;差異：&lt;/b&gt;&lt;ul class='ps-3 mb-1'&gt;&lt;li&gt;每次操作只送一道指令&lt;/li&gt;&lt;li&gt;列容器只顯示執行中（&lt;code&gt;docker ps&lt;/code&gt; 無 -a）&lt;/li&gt;&lt;li&gt;重啟後不做狀態確認&lt;/li&gt;&lt;/ul&gt;&lt;b&gt;建立受限帳號：&lt;/b&gt;&lt;br&gt;&lt;code&gt;sudo bash script/restricted_ssh_user.sh -u dockerop -k &quot;ssh-rsa ...&quot;&lt;/code&gt;&lt;/small&gt;">
+                        <i class="bi bi-question-circle"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </form>
@@ -529,6 +678,7 @@ function showDashboard() {
   // 依權限顯示/隱藏 sidebar 項目與按鈕
   document.getElementById('nav-users').style.display = can('user:read') ? '' : 'none';
   document.getElementById('nav-reboot-logs').style.display = can('host:reboot') ? '' : 'none';
+  document.getElementById('nav-tools').style.display = can('host:reboot') ? '' : 'none';
   document.getElementById('btn-add-host').style.display = can('host:write') ? '' : 'none';
   document.getElementById('btn-add-user').style.display = can('user:write') ? '' : 'none';
 
@@ -616,9 +766,13 @@ let hostModalInstance = null;
 function openAddHost() {
   document.getElementById('modal-host-title').textContent = '新增主機';
   document.getElementById('host-id').value = '';
-  document.getElementById('form-host').reset();
+  document.getElementById('host-name').value = '';
+  document.getElementById('host-host').value = '';
   document.getElementById('host-ssh_port').value = '22';
+  document.getElementById('host-description').value = '';
   document.getElementById('host-form-error').classList.add('d-none');
+  _fillCred('reboot', {});
+  _fillCred('restart', {});
   getHostModal().show();
 }
 
@@ -630,12 +784,40 @@ function openEditHost(id) {
   document.getElementById('host-name').value = h.name || '';
   document.getElementById('host-host').value = h.host || '';
   document.getElementById('host-ssh_port').value = h.ssh_port || 22;
-  document.getElementById('host-ssh_user').value = h.ssh_user || '';
-  document.getElementById('host-ssh_key_path').value = h.ssh_key_path || '';
-  document.getElementById('host-ssh_password').value = '';
   document.getElementById('host-description').value = h.description || '';
   document.getElementById('host-form-error').classList.add('d-none');
+
+  if (h.credential_reboot || h.credential_restart) {
+    _fillCred('reboot', h.credential_reboot);
+    _fillCred('restart', h.credential_restart);
+  } else {
+    // 向下相容舊格式（credentials 陣列或平鋪欄位）
+    const creds = h.credentials || [];
+    const flat = { ssh_user: h.ssh_user, ssh_key_path: h.ssh_key_path, is_root: h.is_root !== false };
+    _fillCred('reboot', creds[0] || flat);
+    _fillCred('restart', creds[1] || creds[0] || flat);
+  }
   getHostModal().show();
+}
+
+// --- Credential helpers ---
+function _fillCred(type, c) {
+  c = c || {};
+  document.getElementById(`${type}-ssh_user`).value = c.ssh_user || '';
+  document.getElementById(`${type}-ssh_key_path`).value = c.ssh_key_path || '';
+  document.getElementById(`${type}-ssh_password`).value = '';
+  document.getElementById(`${type}-is_root`).checked = c.is_root !== false;
+  document.getElementById(`${type}-conn_type`).value = c.conn_type || 'standard';
+}
+
+function _getCred(type) {
+  return {
+    ssh_user: document.getElementById(`${type}-ssh_user`).value.trim(),
+    ssh_key_path: document.getElementById(`${type}-ssh_key_path`).value.trim() || null,
+    ssh_password: document.getElementById(`${type}-ssh_password`).value || null,
+    is_root: document.getElementById(`${type}-is_root`).checked,
+    conn_type: document.getElementById(`${type}-conn_type`).value,
+  };
 }
 
 function getHostModal() {
@@ -650,14 +832,29 @@ async function saveHost() {
   errEl.classList.add('d-none');
   btn.disabled = true;
 
+  const credential_reboot = _getCred('reboot');
+  const credential_restart = _getCred('restart');
+
+  if (!credential_reboot.ssh_user) {
+    errEl.textContent = '重啟主機帳號的 SSH 使用者不得為空';
+    errEl.classList.remove('d-none');
+    btn.disabled = false;
+    return;
+  }
+  if (!credential_restart.ssh_user) {
+    errEl.textContent = '重啟容器帳號的 SSH 使用者不得為空';
+    errEl.classList.remove('d-none');
+    btn.disabled = false;
+    return;
+  }
+
   const payload = {
     name: document.getElementById('host-name').value,
     host: document.getElementById('host-host').value,
-    ssh_user: document.getElementById('host-ssh_user').value,
     ssh_port: parseInt(document.getElementById('host-ssh_port').value) || 22,
-    ssh_key_path: document.getElementById('host-ssh_key_path').value || null,
-    ssh_password: document.getElementById('host-ssh_password').value || null,
     description: document.getElementById('host-description').value,
+    credential_reboot,
+    credential_restart,
   };
 
   try {
@@ -843,7 +1040,7 @@ function closeSidebar() {
 
 // --- Tab switch ---
 function switchTab(tab) {
-  ['hosts', 'users', 'logs', 'reboot-logs'].forEach(t => {
+  ['hosts', 'users', 'logs', 'reboot-logs', 'tools'].forEach(t => {
     document.getElementById(`tab-${t}`).classList.toggle('d-none', tab !== t);
     document.getElementById(`nav-${t}`).classList.toggle('active', tab === t);
   });
@@ -1007,6 +1204,18 @@ function openRebootHost(id, name) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // 初始化連線模式說明 popover（click 觸發，點其他處關閉）
+  document.querySelectorAll('.conn-type-help').forEach(el => {
+    new bootstrap.Popover(el, { html: true, trigger: 'click' });
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.conn-type-help')) {
+      document.querySelectorAll('.conn-type-help').forEach(el => {
+        bootstrap.Popover.getInstance(el)?.hide();
+      });
+    }
+  });
+
   document.getElementById('btn-confirm-reboot').addEventListener('click', async () => {
     if (!rebootTargetId) return;
     const btn = document.getElementById('btn-confirm-reboot');
@@ -1087,6 +1296,69 @@ async function loadLogs() {
       </tr>
     `;
   }).join('');
+}
+
+// --- SSH Key Tool ---
+async function generateSshKey() {
+  const btn = document.getElementById('btn-gen-ssh-key');
+  const alertEl = document.getElementById('ssh-key-alert');
+  const name = document.getElementById('ssh-key-name').value.trim() || 'id_rsa';
+  const force = document.getElementById('ssh-key-force').checked;
+
+  alertEl.classList.add('d-none');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>產生中...';
+
+  try {
+    const res = await apiFetch('/tool/generate-ssh-key', {
+      method: 'POST',
+      body: JSON.stringify({ name, force })
+    });
+    if (!res) return;
+
+    const data = await res.json();
+
+    if (data.public_key) {
+      document.getElementById('ssh-key-pubkey').value = data.public_key;
+      document.getElementById('ssh-key-privpath').textContent = data.private_key_path || '';
+      document.getElementById('ssh-key-result-card').style.display = '';
+      document.getElementById('ssh-key-placeholder-card').style.display = 'none';
+    }
+
+    if (data.success) {
+      alertEl.className = 'alert alert-success py-2';
+      alertEl.textContent = data.message || '金鑰產生成功';
+    } else {
+      alertEl.className = 'alert alert-warning py-2';
+      alertEl.textContent = data.message || '操作失敗';
+    }
+    alertEl.classList.remove('d-none');
+  } catch {
+    alertEl.className = 'alert alert-danger py-2';
+    alertEl.textContent = '連線失敗';
+    alertEl.classList.remove('d-none');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>產生金鑰';
+}
+
+async function copySshPublicKey() {
+  const text = document.getElementById('ssh-key-pubkey').value;
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = event.currentTarget;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>已複製';
+    btn.classList.replace('btn-outline-secondary', 'btn-success');
+    setTimeout(() => {
+      btn.innerHTML = orig;
+      btn.classList.replace('btn-success', 'btn-outline-secondary');
+    }, 2000);
+  } catch {
+    document.getElementById('ssh-key-pubkey').select();
+  }
 }
 
 // --- Utils ---

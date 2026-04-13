@@ -27,26 +27,41 @@ Python-ContainerTool/
 ├── run.py                          # Flask API 啟動入口
 ├── app/
 │   ├── __init__.py                 # Flask app 初始化，Swagger 設定，藍圖註冊
+│   ├── admin/
+│   │   └── view.py                 # 後台 HTML 路由（/admin/）
 │   ├── auth/
 │   │   └── view.py                 # 登入驗證路由（/auth/login）
 │   ├── host/
 │   │   └── view.py                 # 主機與容器管理路由（/host/...）
-│   └── sample/
-│       ├── view.py                 # 範例路由
-│       └── doc/
-│           └── sample.yaml         # Swagger API 文件定義
+│   ├── log/
+│   │   └── view.py                 # 操作紀錄路由（/log/...）
+│   ├── tool/
+│   │   └── view.py                 # 工具路由（/tool/...）
+│   ├── user/
+│   │   └── view.py                 # 使用者管理路由（/user/...）
+│   ├── sample/
+│   │   └── view.py                 # 範例路由
+│   └── templates/
+│       └── admin/
+│           └── index.html          # 後台管理介面（單頁 SPA）
 ├── .env.default                    # 環境變數範本（FLASK_PORT）
 ├── conf/
-│   ├── config.ini.default          # 設定檔範本（SSH、MongoDB、Log）
+│   ├── config.ini.default          # 設定檔範本（APP、SSH、MongoDB、Log）
 │   ├── config.py                   # Flask 設定物件（BasicConfig 等）
 │   └── flask.json.default          # Flask SECRET_KEY 範本
 ├── src/
-│   ├── __init__.py                 # 全域設定讀取（SSH、MongoDB、Log）
+│   ├── __init__.py                 # 全域設定讀取（APP、SSH、MongoDB、Log）
 │   ├── container.py                # ContainerTool：SSH 操作 Docker
 │   ├── mongo.py                    # MongoDB 連線管理
+│   ├── permissions.py              # 角色權限裝飾器
 │   └── models/
 │       ├── user.py                 # User model（帳號密碼）
-│       └── host.py                 # Host model（主機資訊 CRUD）
+│       ├── host.py                 # Host model（主機資訊 CRUD）
+│       ├── restart_log.py          # 容器重啟紀錄 model
+│       └── reboot_log.py           # 主機重開機紀錄 model
+├── script/
+│   ├── restricted_ssh_user.sh      # 建立受限 SSH 用戶 dockerop
+│   └── allowed_commands.sh         # dockerop 允許執行的指令白名單
 └── requirements.txt
 ```
 
@@ -54,13 +69,41 @@ Python-ContainerTool/
 
 ## 功能說明
 
-- **帳號密碼登入驗證**：`POST /auth/login` 驗證後回傳 JWT token
-- **主機管理**：透過 API 新增、查詢、修改、刪除遠端主機設定（存入 MongoDB）
-- **容器查詢**：SSH 連線至指定主機，列出所有容器及狀態
-- **容器操作**：支援重啟指定容器
-- **後台管理介面**：`/admin/` 提供主機 CRUD 與容器操作的視覺化後台
-- **Swagger UI**：自動產生互動式 API 文件
-- **CLI 工具**：`main.py` 支援命令列直接操作容器
+### 後台管理介面
+
+`/admin/` 提供完整的視覺化後台，支援 RWD（行動裝置響應式）。
+
+| 頁面 | 說明 |
+|------|------|
+| 主機管理 | 新增、編輯、刪除主機，每台主機設定重啟主機帳號與重啟容器帳號兩組 SSH 憑證，各可選標準 SSH 或受限指令模式 |
+| 容器管理 | 列出主機上所有容器、單一重啟、批次重啟 |
+| 使用者管理 | 新增、編輯、刪除帳號，角色分為 admin / operator / viewer |
+| 重啟紀錄 | 容器重啟的操作歷程（操作者、主機、容器、結果） |
+| 重開機紀錄 | 主機重開機的操作歷程 |
+| SSH 金鑰產生 | 在後台直接產生 RSA 4096-bit 金鑰對，顯示公鑰供部署使用 |
+
+### API 服務
+
+- **JWT 身份驗證**：`POST /auth/login` 驗證後回傳 JWT token
+- **主機管理**：CRUD 主機設定（含多組 SSH 憑證），存入 MongoDB
+- **容器操作**：列出容器、單一重啟、批次重啟
+- **主機重開機**：遠端執行 reboot（需 admin 角色）
+- **使用者管理**：CRUD 系統帳號（需 admin 角色）
+- **操作紀錄**：查詢重啟與重開機歷程
+- **SSH 金鑰工具**：產生金鑰對並回傳公鑰
+- **Swagger UI**：`/apidocs` 互動式 API 文件
+
+### CLI 工具
+
+`main.py` 支援命令列直接操作容器，以及 SECRET_KEY 與 SSH 金鑰的初始化。
+
+### 角色權限
+
+| 角色 | 可執行操作 |
+|------|-----------|
+| `admin` | 所有操作，含使用者管理、主機重開機、SSH 金鑰產生 |
+| `operator` | 主機與容器的讀寫、容器重啟 |
+| `viewer` | 主機與容器唯讀 |
 
 ---
 
@@ -121,8 +164,11 @@ run.py
        ├─ 初始化 JWTManager
        ├─ 註冊藍圖：app_auth（/auth）
        ├─ 註冊藍圖：app_host（/host）
-       ├─ 註冊藍圖：app_sample（/sample）
        ├─ 註冊藍圖：app_admin（/admin）
+       ├─ 註冊藍圖：app_user（/user）
+       ├─ 註冊藍圖：app_log（/log）
+       ├─ 註冊藍圖：app_tool（/tool）
+       ├─ 註冊藍圖：app_sample（/sample）
        └─ app.run(debug=True) → 監聽 0.0.0.0:5000
 ```
 
@@ -152,7 +198,7 @@ JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 
 **4. 放入 SSH 私鑰（使用金鑰認證時）**
 
-將私鑰複製至專案目錄下的 `ssh/` 資料夾，並在 `conf/config.ini` 設定路徑：
+將私鑰複製至專案目錄下的 `ssh/` 資料夾，路徑填入各主機的憑證設定中（後台 → 主機管理 → 新增/編輯主機 → SSH 私鑰路徑）。
 
 ```bash
 mkdir ssh
@@ -160,10 +206,7 @@ cp ~/.ssh/id_rsa ssh/id_rsa
 chmod 600 ssh/id_rsa
 ```
 
-```ini
-[SSH]
-SSH_KEY_PATH=ssh/id_rsa
-```
+也可使用後台的「SSH 金鑰產生」工具直接在服務端產生金鑰對。
 
 **5. 編輯 conf/config.ini，將 MONGO_URI 指向容器內的 MongoDB**
 
@@ -231,7 +274,7 @@ python run.py
 
 ```bash
 # 重啟遠端容器（使用 SSH 金鑰）
-python main.py -H 192.168.1.100 -c my_container -k ~/.ssh/id_rsa --action restart
+python main.py -H 192.168.1.100 -c my_container -k ssh/id_rsa --action restart
 
 # 查詢容器狀態（使用密碼）
 python main.py -H 192.168.1.100 -c my_container -u root --action status
@@ -247,7 +290,7 @@ python main.py --gen-secret-key
 python main.py --gen-secret-key --force
 ```
 
-#### SSH 金鑰管理
+#### SSH 金鑰管理（CLI）
 
 產生的金鑰對會存入專案目錄下的 `ssh/` 資料夾。
 
@@ -262,12 +305,9 @@ python main.py --gen-ssh-key --ssh-key-name my_key
 python main.py --gen-ssh-key --force
 ```
 
-產生後將公鑰內容加入遠端主機的 `~/.ssh/authorized_keys`，並在 `conf/config.ini` 設定：
+也可透過後台「SSH 金鑰產生」工具（admin 角色）在網頁上操作，產生後直接顯示公鑰供複製使用。
 
-```ini
-[SSH]
-SSH_KEY_PATH=ssh/id_rsa
-```
+產生後將公鑰加入遠端主機的 `~/.ssh/authorized_keys`，並在主機憑證設定中填入私鑰路徑（例如 `ssh/id_rsa`）。
 
 ---
 
@@ -289,7 +329,8 @@ curl -X POST http://127.0.0.1:5000/auth/login \
 ```json
 {
   "success": true,
-  "token": "eyJ..."
+  "token": "eyJ...",
+  "role": "admin"
 }
 ```
 
@@ -299,15 +340,41 @@ curl -X POST http://127.0.0.1:5000/auth/login \
 
 ### 主機管理
 
-| 方法 | 路徑 | 說明 |
-|------|------|------|
-| GET | `/host/` | 列出所有主機 |
-| POST | `/host/` | 新增主機 |
-| GET | `/host/<host_id>` | 取得單一主機資訊 |
-| PUT | `/host/<host_id>` | 更新主機設定 |
-| DELETE | `/host/<host_id>` | 刪除主機 |
+| 方法 | 路徑 | 權限 | 說明 |
+|------|------|------|------|
+| GET | `/host/` | viewer+ | 列出所有主機 |
+| POST | `/host/` | operator+ | 新增主機 |
+| GET | `/host/<host_id>` | viewer+ | 取得單一主機資訊 |
+| PUT | `/host/<host_id>` | operator+ | 更新主機設定 |
+| DELETE | `/host/<host_id>` | operator+ | 刪除主機 |
 
-新增主機範例：
+每台主機需設定兩組固定 SSH 憑證：**重啟主機帳號**（`credential_reboot`）與**重啟容器帳號**（`credential_restart`），分別用於主機重開機與容器操作。
+
+#### 憑證欄位說明
+
+| 欄位 | 必填 | 說明 |
+|------|------|------|
+| `ssh_user` | 是 | SSH 登入使用者名稱 |
+| `ssh_key_path` | 否 | SSH 私鑰路徑（與 `ssh_password` 擇一） |
+| `ssh_password` | 否 | SSH 密碼（明文） |
+| `is_root` | 否 | 是否為 root 帳號（`false` 時指令加 `sudo`），預設 `true` |
+| `conn_type` | 否 | 連線模式，預設 `standard`（詳見下方） |
+
+#### conn_type 連線模式
+
+| 值 | 說明 |
+|----|------|
+| `standard` | 標準 SSH 互動模式，`ContainerTool`；支援多步驟指令、重啟後狀態確認、`docker ps -a` |
+| `restricted` | 受限指令模式，`RestrictedContainerTool`；透過 `authorized_keys` 的 `command=` 白名單執行，每次操作只送一道指令 |
+
+受限指令模式（`restricted`）的行為差異：
+- 列出容器使用 `docker ps`（無 `-a`），**只顯示執行中的容器**
+- 重啟後不做狀態確認（無法送第二道 `docker inspect`）
+- 重開機使用 `reboot`（需白名單含此指令）
+- 適用由 `script/restricted_ssh_user.sh` 建立的受限帳號
+
+#### 新增主機
+
 ```bash
 curl -X POST http://127.0.0.1:5000/host/ \
   -H "Authorization: Bearer <token>" \
@@ -315,10 +382,37 @@ curl -X POST http://127.0.0.1:5000/host/ \
   -d '{
     "name": "server-01",
     "host": "192.168.1.100",
-    "ssh_user": "root",
     "ssh_port": 22,
-    "ssh_key_path": "~/.ssh/id_rsa",
-    "description": "主要伺服器"
+    "description": "主要伺服器",
+    "credential_reboot": {
+      "ssh_user": "root",
+      "ssh_key_path": "ssh/id_rsa",
+      "is_root": true,
+      "conn_type": "standard"
+    },
+    "credential_restart": {
+      "ssh_user": "dockerop",
+      "ssh_key_path": "ssh/id_rsa_dockerop",
+      "is_root": false,
+      "conn_type": "restricted"
+    }
+  }'
+```
+
+#### 編輯主機
+
+```bash
+curl -X PUT http://127.0.0.1:5000/host/<host_id> \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "更新說明",
+    "credential_restart": {
+      "ssh_user": "dockerop",
+      "ssh_key_path": "ssh/id_rsa_dockerop",
+      "is_root": false,
+      "conn_type": "restricted"
+    }
   }'
 ```
 
@@ -326,10 +420,12 @@ curl -X POST http://127.0.0.1:5000/host/ \
 
 ### 容器管理
 
-| 方法 | 路徑 | 說明 |
-|------|------|------|
-| GET | `/host/<host_id>/containers` | 列出主機上所有容器 |
-| POST | `/host/<host_id>/containers/<container_name>/restart` | 重啟指定容器 |
+| 方法 | 路徑 | 權限 | 說明 |
+|------|------|------|------|
+| GET | `/host/<host_id>/containers` | viewer+ | 列出主機上所有容器 |
+| POST | `/host/<host_id>/containers/<container_name>/restart` | operator+ | 重啟指定容器 |
+| POST | `/host/<host_id>/containers/batch-restart` | operator+ | 批次重啟多個容器 |
+| POST | `/host/<host_id>/reboot` | admin | 重開機主機 |
 
 ```bash
 # 列出容器
@@ -339,6 +435,12 @@ curl http://127.0.0.1:5000/host/<host_id>/containers \
 # 重啟容器
 curl -X POST http://127.0.0.1:5000/host/<host_id>/containers/my_container/restart \
   -H "Authorization: Bearer <token>"
+
+# 批次重啟
+curl -X POST http://127.0.0.1:5000/host/<host_id>/containers/batch-restart \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"containers": ["nginx", "redis"]}'
 ```
 
 容器列表回應格式：
@@ -357,6 +459,57 @@ curl -X POST http://127.0.0.1:5000/host/<host_id>/containers/my_container/restar
 }
 ```
 
+> **注意**：若重啟容器帳號的 `conn_type` 為 `restricted`，容器列表只顯示執行中的容器（`docker ps` 無 `-a`）；重啟後不做狀態確認。
+
+---
+
+### 使用者管理
+
+| 方法 | 路徑 | 權限 | 說明 |
+|------|------|------|------|
+| GET | `/user/` | admin | 列出所有使用者 |
+| POST | `/user/` | admin | 新增使用者 |
+| GET | `/user/<user_id>` | admin | 取得單一使用者 |
+| PUT | `/user/<user_id>` | admin | 更新使用者（角色、密碼） |
+| DELETE | `/user/<user_id>` | admin | 刪除使用者 |
+
+---
+
+### 操作紀錄
+
+| 方法 | 路徑 | 權限 | 說明 |
+|------|------|------|------|
+| GET | `/log/restart` | viewer+ | 容器重啟紀錄 |
+| GET | `/log/reboot` | admin | 主機重開機紀錄 |
+
+---
+
+### 工具
+
+| 方法 | 路徑 | 權限 | 說明 |
+|------|------|------|------|
+| POST | `/tool/generate-ssh-key` | admin | 產生 RSA 4096-bit SSH 金鑰對 |
+
+```bash
+curl -X POST http://127.0.0.1:5000/tool/generate-ssh-key \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "id_rsa", "force": false}'
+```
+
+回應：
+```json
+{
+  "success": true,
+  "public_key": "ssh-rsa AAAA...",
+  "private_key_path": "ssh/id_rsa",
+  "public_key_path": "ssh/id_rsa.pub",
+  "message": "金鑰已產生：ssh/id_rsa"
+}
+```
+
+將回傳的 `public_key` 加入遠端主機的 `~/.ssh/authorized_keys`，並在主機憑證設定中填入對應的 `private_key_path`。
+
 ---
 
 ### 其他
@@ -373,9 +526,12 @@ curl -X POST http://127.0.0.1:5000/host/<host_id>/containers/my_container/restar
 ### conf/config.ini（從 config.ini.default 複製）
 
 ```ini
+[SETTING]
+; ADMIN_TITLE=
+
 [SSH]
 SSH_USER=root
-; SSH_KEY_PATH=~/.ssh/id_rsa
+; SSH_KEY_PATH=ssh/id_rsa
 ; SSH_PASSWORD=
 ; SSH_PORT=22
 ; SSH_TIMEOUT=10
@@ -391,6 +547,16 @@ MONGO_DB=container_tool
 ; LOG_FILE_DISABLE=1
 ```
 
+#### [SETTING]
+
+| 欄位 | 說明 | 預設值 |
+|------|------|--------|
+| `ADMIN_TITLE` | 後台管理頁面名稱（頁籤、登入頁、Navbar） | `ContainerTool 後台` |
+
+#### [SSH]
+
+CLI 工具（`main.py`）的預設 SSH 設定，後台 API 的主機連線使用各主機的 `credentials` 欄位。
+
 | 欄位 | 說明 | 預設值 |
 |------|------|--------|
 | `SSH_USER` | SSH 登入使用者 | `root` |
@@ -398,8 +564,15 @@ MONGO_DB=container_tool
 | `SSH_PASSWORD` | SSH 密碼 | - |
 | `SSH_PORT` | SSH port | `22` |
 | `SSH_TIMEOUT` | SSH 連線逾時秒數 | `10` |
+
+#### [MONGO]
+
+| 欄位 | 說明 | 預設值 |
+|------|------|--------|
 | `MONGO_URI` | MongoDB 連線 URI | `mongodb://localhost:27017` |
 | `MONGO_DB` | MongoDB 資料庫名稱 | `container_tool` |
+
+---
 
 ### conf/flask.json（從 flask.json.default 複製）
 
@@ -423,6 +596,8 @@ python main.py --gen-secret-key --force
 
 啟動 `run.py` 時若 `SECRET_KEY` 為空，也會自動產生並寫入。
 
+---
+
 ### .env（從 .env.default 複製）
 
 ```env
@@ -439,60 +614,41 @@ JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 
 ## 建議注意事項
 
-- `conf/flask.json`、`conf/config.ini`、`.env` 含有敏感資訊，請勿提交至版本控制。
+- `conf/flask.json`、`conf/config.ini`、`.env`、`ssh/` 含有敏感資訊，請勿提交至版本控制。
 - `SECRET_KEY` 請使用足夠長的隨機字串，正式環境務必更換。
 - `run.py` 使用 `TestingConfig` 啟動，預設 `debug=True`，僅適用於開發環境；正式部署請改用生產設定並關閉 debug 模式。
 - 正式部署建議使用 gunicorn 搭配 nginx 作為反向代理。
-- 主機的 `ssh_password` 欄位以明文存入 MongoDB，正式環境建議加密儲存或改用 SSH 金鑰認證。
+- 主機的 `credential_reboot.ssh_password` 與 `credential_restart.ssh_password` 欄位以明文存入 MongoDB，正式環境建議加密儲存或改用 SSH 金鑰認證。
+- SSH 私鑰（`ssh/` 目錄）的存取權限為 `0600`，請確保容器或主機的檔案權限設定正確。
+
+---
 
 ## 腳本
 
 ### script/restricted_ssh_user.sh
 
-在遠端主機建立受限 SSH 用戶 `dockerop`，讓 ContainerTool 以最小權限透過 SSH 操作 Docker，適用於 Ubuntu / Debian / CentOS / RHEL。
+在遠端主機建立受限 SSH 用戶，透過 `authorized_keys` 的 `command=` 指向白名單 wrapper，讓 ContainerTool 以最小權限透過 SSH 操作 Docker，適用於 Ubuntu / Debian / CentOS / RHEL。
 
-**用戶可執行的操作：**
-
-- `sudo docker ps` / `sudo docker ps -a`
-- `sudo docker restart <container>`
-- `sudo docker logs <container>`
-- `sudo reboot` / `sudo shutdown -r now`
+詳細說明請參考：[docs/restricted_ssh_user.md](docs/restricted_ssh_user.md)
 
 **使用方式：**
 
 ```bash
-# 在遠端主機以 root 身份執行
-sudo bash script/restricted_ssh_user.sh
+# 建立帳號並寫入公鑰（在遠端主機以 root 身份執行）
+sudo bash script/restricted_ssh_user.sh -u testuser -k "ssh-rsa AAAA..."
+
+# 先建帳號，之後手動補公鑰
+sudo bash script/restricted_ssh_user.sh -u testuser
 ```
 
-執行完畢後，腳本會提示設定 `dockerop` 的登入密碼。
+| 參數 | 說明 | 預設值 |
+|------|------|--------|
+| `-u`, `--user` | 帳號名稱 | `dockerop` |
+| `-k`, `--key` | SSH 公鑰，可多次指定 | 無 |
 
-**連線測試：**
+**連線測試（指令帶在 ssh 後面）：**
 
 ```bash
-ssh dockerop@your-server-ip
+ssh testuser@your-server-ip docker ps
+ssh testuser@your-server-ip docker restart <容器名>
 ```
-
-**設計說明：**
-
-| 步驟 | 說明 |
-|------|------|
-| `/etc/shells` 註冊 | SSH 守護行程（sshd）會拒絕 Shell 不在此清單中的用戶；將 `/bin/rbash` 加入是連線成功的關鍵 |
-| `rbash` 受限環境 | 用戶 PATH 鎖定為 `~/bin`，只能執行白名單中的 `sudo`、`docker`，無法使用絕對路徑跳脫 |
-| `.bash_profile` 由 root 擁有 | 防止用戶在 rbash 內修改自身的 PATH 或環境變數 |
-| `ForceCommand /bin/rbash --login` | 確保 SSH 登入時強制讀取 `.bash_profile` 以套用 PATH 限制 |
-| SSHD 配置去重 | 使用 `sed` 先移除舊設定區塊，避免重複執行腳本產生衝突配置 |
-
-**除錯方式：**
-
-若執行完仍無法連線，在伺服器端觀察即時日誌：
-
-```bash
-# Ubuntu / Debian
-tail -f /var/log/auth.log
-
-# CentOS / RHEL
-tail -f /var/log/secure
-```
-
-同時嘗試 SSH 登入，日誌會顯示具體錯誤（`Permission denied` 或 `Invalid shell`）。

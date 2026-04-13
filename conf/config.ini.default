@@ -1,3 +1,7 @@
+[SETTING]
+; 後台管理頁面名稱 預設值 ContainerTool 後台
+; ADMIN_TITLE=
+
 [SSH]
 ; SSH 使用者 預設 root
 SSH_USER=root

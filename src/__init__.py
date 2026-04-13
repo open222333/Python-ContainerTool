@@ -28,6 +28,9 @@ if LOG_DISABLE:
     logging.disable()
 
 
+# SETTING 參數
+APP_TITLE = config.get('SETTING', 'ADMIN_TITLE', fallback='ContainerTool 後台')
+
 # SSH 連線參數
 SSH_USER = config.get('SSH', 'SSH_USER', fallback='root')
 SSH_KEY_PATH = config.get('SSH', 'SSH_KEY_PATH', fallback=None)

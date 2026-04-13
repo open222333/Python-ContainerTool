@@ -7,6 +7,7 @@ from app.host.view import app_host
 from app.admin.view import app_admin
 from app.user.view import app_user
 from app.log.view import app_log
+from app.tool.view import app_tool
 from src import FLASK_JSON_PATH
 import json
 
@@ -59,6 +60,7 @@ def create_app(confgi_object=None):
     app.register_blueprint(blueprint=app_admin, url_prefix='/admin')
     app.register_blueprint(blueprint=app_user, url_prefix='/user')
     app.register_blueprint(blueprint=app_log, url_prefix='/log')
+    app.register_blueprint(blueprint=app_tool, url_prefix='/tool')
     if confgi_object:
         app.config.from_object(confgi_object)
     return app
