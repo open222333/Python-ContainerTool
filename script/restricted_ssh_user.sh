@@ -3,11 +3,19 @@
 # 建立受限 SSH 用戶
 # 限制方式：authorized_keys command= 指向 wrapper，per-key 控管
 #
-# Usage: bash restricted_ssh_user.sh [-u USERNAME] [-k "ssh-rsa AAAA..."]
+# Usage: bash restricted_ssh_user.sh [-u USERNAME] [-k "ssh-rsa AAAA..."] [-a ALLOW]
 #
-#   -u, --user USERNAME     使用者名稱 (預設: dockerop)
-#   -k, --key  PUBLIC_KEY   SSH 公鑰，寫入 authorized_keys (可多次指定)
-#   -h, --help              顯示說明
+#   -u, --user   USERNAME    使用者名稱 (預設: dockerop)
+#   -k, --key    PUBLIC_KEY  SSH 公鑰，寫入 authorized_keys (可多次指定)
+#   -a, --allow  PERMS       允許的指令類別，逗號分隔 (預設: docker,reboot)
+#                              docker  — docker ps / inspect / restart / logs
+#                              reboot  — reboot
+#   -h, --help               顯示說明
+#
+# 範例：
+#   bash restricted_ssh_user.sh -u restart_user -k "ssh-rsa ..." --allow docker
+#   bash restricted_ssh_user.sh -u reboot_user  -k "ssh-rsa ..." --allow reboot
+#   bash restricted_ssh_user.sh -u full_user    -k "ssh-rsa ..." --allow docker,reboot
 #
 # 產生的 authorized_keys 格式：
 #   command="/usr/local/bin/<user>-ctrl.sh",no-pty,no-agent-forwarding,
@@ -24,31 +32,54 @@ fi
 ### ── 預設值 ────────────────────────────────────────────────
 RESTRICTED_USER="dockerop"
 SSH_KEYS=()
+ALLOW="docker,reboot"
 
 ### ── 解析參數 ──────────────────────────────────────────────
 usage() {
     cat << EOF
-Usage: $0 [-u USERNAME] [-k PUBLIC_KEY]
+Usage: $0 [-u USERNAME] [-k PUBLIC_KEY] [-a ALLOW]
 
-  -u, --user USERNAME     使用者名稱 (預設: dockerop)
-  -k, --key  PUBLIC_KEY   SSH 公鑰 (可多次指定，加入 authorized_keys)
-  -h, --help              顯示說明
+  -u, --user   USERNAME    使用者名稱 (預設: dockerop)
+  -k, --key    PUBLIC_KEY  SSH 公鑰 (可多次指定，加入 authorized_keys)
+  -a, --allow  PERMS       允許的指令類別，逗號分隔 (預設: docker,reboot)
+                             docker  — docker ps / inspect / restart / logs
+                             reboot  — reboot
+  -h, --help               顯示說明
 
 範例：
-  $0 -u testuser -k "ssh-rsa AAAA..."
-  $0 -u testuser -k "ssh-rsa AAAA..." -k "ssh-ed25519 BBBB..."
+  $0 -u restart_user -k "ssh-rsa AAAA..." --allow docker
+  $0 -u reboot_user  -k "ssh-rsa AAAA..." --allow reboot
+  $0 -u full_user    -k "ssh-rsa AAAA..." --allow docker,reboot
 EOF
     exit 0
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -u|--user)  RESTRICTED_USER="$2"; shift 2 ;;
-        -k|--key)   SSH_KEYS+=("$2");     shift 2 ;;
-        -h|--help)  usage ;;
+        -u|--user)   RESTRICTED_USER="$2"; shift 2 ;;
+        -k|--key)    SSH_KEYS+=("$2");     shift 2 ;;
+        -a|--allow)  ALLOW="$2";           shift 2 ;;
+        -h|--help)   usage ;;
         *) echo "❌ 未知參數: $1"; usage ;;
     esac
 done
+
+### ── 解析 --allow ──────────────────────────────────────────
+ALLOW_DOCKER=false
+ALLOW_REBOOT=false
+IFS=',' read -ra ALLOW_LIST <<< "$ALLOW"
+for item in "${ALLOW_LIST[@]}"; do
+    case "${item// /}" in
+        docker) ALLOW_DOCKER=true ;;
+        reboot) ALLOW_REBOOT=true ;;
+        *) echo "❌ --allow 不支援的值：${item}（可用：docker、reboot）"; exit 1 ;;
+    esac
+done
+
+if [[ "$ALLOW_DOCKER" == false && "$ALLOW_REBOOT" == false ]]; then
+    echo "❌ --allow 至少需要指定一個：docker 或 reboot"
+    exit 1
+fi
 
 ### ── 共用變數 ──────────────────────────────────────────────
 RESTRICTED_GROUP="${RESTRICTED_USER}"
@@ -63,6 +94,7 @@ KEY_OPTIONS="command=\"${WRAPPER}\",no-pty,no-agent-forwarding,no-port-forwardin
 
 echo "======================================================"
 echo "  建立受限用戶：${RESTRICTED_USER}"
+echo "  允許指令：${ALLOW}"
 echo "======================================================"
 
 ### ── 1. 建立群組與用戶 ──────────────────────────────────────
@@ -77,10 +109,26 @@ fi
 
 ### ── 2. 設定 sudoers ──────────────────────────────────────
 echo "[2] 設定 sudoers..."
+
+# 依 --allow 動態組合 NOPASSWD 指令清單
+SUDO_CMDS=()
+if [[ "$ALLOW_DOCKER" == true ]]; then
+    SUDO_CMDS+=(
+        "${DOCKER_BIN} ps*"
+        "${DOCKER_BIN} inspect *"
+        "${DOCKER_BIN} restart *"
+        "${DOCKER_BIN} logs *"
+    )
+fi
+if [[ "$ALLOW_REBOOT" == true ]]; then
+    SUDO_CMDS+=("${REBOOT_BIN}")
+fi
+SUDO_CMDS_STR=$(IFS=', '; echo "${SUDO_CMDS[*]}")
+
 cat > "${SUDOERS_FILE}" << EOF
 Defaults:${RESTRICTED_USER} secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Defaults:${RESTRICTED_USER} !requiretty
-${RESTRICTED_USER} ALL=(root) NOPASSWD: ${DOCKER_BIN} ps*, ${DOCKER_BIN} inspect *, ${DOCKER_BIN} restart *, ${DOCKER_BIN} logs *, ${REBOOT_BIN}
+${RESTRICTED_USER} ALL=(root) NOPASSWD: ${SUDO_CMDS_STR}
 EOF
 chmod 440 "${SUDOERS_FILE}"
 visudo -cf "${SUDOERS_FILE}" && echo "    ✓ sudoers 語法正確"
@@ -93,41 +141,52 @@ sed -i 's/^\s*Defaults\s\+requiretty/#&/' /etc/sudoers
 echo "[4] 建立 ForceCommand wrapper..."
 
 # 用陣列解析指令，防止 shell injection (e.g. "docker ps; rm -rf /")
-cat > "${WRAPPER}" << 'WRAPPER_EOF'
+# ALLOW_DOCKER / ALLOW_REBOOT 在產生時寫入 wrapper，限制可執行的指令類別
+cat > "${WRAPPER}" << EOF
 #!/bin/bash
 # ForceCommand wrapper — 驗證 SSH_ORIGINAL_COMMAND 白名單
-# 透過 authorized_keys command= 呼叫，$SSH_ORIGINAL_COMMAND 為使用者原始輸入
-DOCKER_BIN="$(which docker 2>/dev/null || echo '/usr/bin/docker')"
-REBOOT_BIN="$(which reboot 2>/dev/null || echo '/sbin/reboot')"
+# 由 restricted_ssh_user.sh 產生，允許指令：${ALLOW}
+ALLOW_DOCKER=${ALLOW_DOCKER}
+ALLOW_REBOOT=${ALLOW_REBOOT}
+DOCKER_BIN="\$(which docker 2>/dev/null || echo '/usr/bin/docker')"
+REBOOT_BIN="\$(which reboot 2>/dev/null || echo '/sbin/reboot')"
 
-if [[ -z "${SSH_ORIGINAL_COMMAND:-}" ]]; then
+if [[ -z "\${SSH_ORIGINAL_COMMAND:-}" ]]; then
     echo "❌ 不允許互動式登入"
     exit 1
 fi
 
-read -ra ARGS <<< "${SSH_ORIGINAL_COMMAND}"
+read -ra ARGS <<< "\${SSH_ORIGINAL_COMMAND}"
 
-case "${ARGS[0]}" in
+case "\${ARGS[0]}" in
     docker)
-        case "${ARGS[1]}" in
+        if [[ "\${ALLOW_DOCKER}" != "true" ]]; then
+            echo "❌ 此帳號不允許執行 docker 指令"
+            exit 1
+        fi
+        case "\${ARGS[1]}" in
             ps|inspect|restart|logs)
-                exec /usr/bin/sudo "${DOCKER_BIN}" "${ARGS[@]:1}"
+                exec /usr/bin/sudo "\${DOCKER_BIN}" "\${ARGS[@]:1}"
                 ;;
             *)
-                echo "❌ 不允許的 docker 子指令: ${ARGS[1]}"
+                echo "❌ 不允許的 docker 子指令: \${ARGS[1]}"
                 exit 1
                 ;;
         esac
         ;;
     reboot)
-        exec /usr/bin/sudo "${REBOOT_BIN}"
+        if [[ "\${ALLOW_REBOOT}" != "true" ]]; then
+            echo "❌ 此帳號不允許執行 reboot"
+            exit 1
+        fi
+        exec /usr/bin/sudo "\${REBOOT_BIN}"
         ;;
     *)
-        echo "❌ 不允許的指令: ${ARGS[0]}"
+        echo "❌ 不允許的指令: \${ARGS[0]}"
         exit 1
         ;;
 esac
-WRAPPER_EOF
+EOF
 
 chmod 755 "${WRAPPER}"
 chown root:root "${WRAPPER}"
@@ -189,14 +248,21 @@ echo "=============================================="
 echo "  ✅ 受限用戶設定完成！"
 echo ""
 echo "  用戶名稱：${RESTRICTED_USER}"
+echo "  允許指令：${ALLOW}"
 echo "  wrapper ：${WRAPPER}"
 echo "  authorized_keys：${AUTH_KEYS}"
 echo ""
 echo "  authorized_keys 格式（手動新增公鑰時使用）："
 echo "  ${KEY_OPTIONS} ssh-rsa <KEY>"
 echo ""
-echo "  連線測試（指令帶在 ssh 後面）："
+if [[ "$ALLOW_DOCKER" == true ]]; then
+echo "  連線測試（docker）："
 echo "    ssh ${RESTRICTED_USER}@<SERVER_IP> docker ps"
 echo "    ssh ${RESTRICTED_USER}@<SERVER_IP> docker restart <容器名>"
 echo "    ssh ${RESTRICTED_USER}@<SERVER_IP> docker logs <容器名>"
+fi
+if [[ "$ALLOW_REBOOT" == true ]]; then
+echo "  連線測試（reboot）："
+echo "    ssh ${RESTRICTED_USER}@<SERVER_IP> reboot"
+fi
 echo "=============================================="

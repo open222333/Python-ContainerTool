@@ -1,6 +1,10 @@
 docker-compose.yml
+docker-compose.dev.yml
+docker-compose.prod.yml
 .env
 ssh/
+docker/nginx.conf
+docker/ssl/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

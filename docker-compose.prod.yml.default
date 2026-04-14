@@ -1,0 +1,39 @@
+services:
+  nginx:
+    image: nginx:1.26.3-alpine
+    hostname: container-tool-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: python-container-tool:latest
+    hostname: container-tool
+    env_file: .env
+    expose:
+      - "5000"
+    volumes:
+      - ./conf:/app/conf
+      - ./logs:/app/logs
+      - ./ssh:/app/ssh
+      - ./app/templates:/app/app/templates
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    hostname: container-tool-mongo
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

@@ -44,7 +44,9 @@ Python-ContainerTool/
 │   └── templates/
 │       └── admin/
 │           └── index.html          # 後台管理介面（單頁 SPA）
-├── .env.default                    # 環境變數範本（FLASK_PORT）
+├── .env.default                    # 環境變數範本
+├── docker-compose.dev.yml.default  # Docker Compose 範本（測試模式，Flask 直接對外）
+├── docker-compose.prod.yml.default # Docker Compose 範本（正式模式，nginx + SSL）
 ├── conf/
 │   ├── config.ini.default          # 設定檔範本（APP、SSH、MongoDB、Log）
 │   ├── config.py                   # Flask 設定物件（BasicConfig 等）
@@ -59,6 +61,12 @@ Python-ContainerTool/
 │       ├── host.py                 # Host model（主機資訊 CRUD）
 │       ├── restart_log.py          # 容器重啟紀錄 model
 │       └── reboot_log.py           # 主機重開機紀錄 model
+├── docker/
+│   ├── nginx.conf.default          # nginx 設定範本（HTTP→HTTPS 轉址 + 反向代理）
+│   ├── nginx.conf                  # 實際 nginx 設定（從 .default 複製後修改，不納入 git）
+│   └── ssl/                        # SSL 憑證目錄（不納入 git）
+│       ├── cert.pem                #   憑證（含中繼憑證鏈）
+│       └── key.pem                 #   私鑰
 ├── script/
 │   ├── restricted_ssh_user.sh      # 建立受限 SSH 用戶 dockerop
 │   └── allowed_commands.sh         # dockerop 允許執行的指令白名單
@@ -80,7 +88,7 @@ Python-ContainerTool/
 | 使用者管理 | 新增、編輯、刪除帳號，角色分為 admin / operator / viewer |
 | 重啟紀錄 | 容器重啟的操作歷程（操作者、主機、容器、結果） |
 | 重開機紀錄 | 主機重開機的操作歷程 |
-| SSH 金鑰產生 | 在後台直接產生 RSA 4096-bit 金鑰對，顯示公鑰供部署使用 |
+| SSH 金鑰產生 | 在後台直接產生 RSA 4096-bit 金鑰對；「已有公鑰」列表顯示所有已產生的公鑰，可一鍵複製 |
 
 ### API 服務
 
@@ -178,13 +186,30 @@ run.py
 
 使用 Docker Compose 可同時啟動 Flask API 服務與 MongoDB，無需手動安裝 Python 環境。
 
+提供兩種啟動模式：
+
+| 模式 | 範本 | 說明 |
+|------|------|------|
+| 測試 | `docker-compose.dev.yml.default` | Flask 直接對外，無 nginx |
+| 正式 | `docker-compose.prod.yml.default` | nginx 反向代理 + SSL |
+
 **1. 複製設定檔範本**
 
+測試模式：
 ```bash
 cp conf/config.ini.default conf/config.ini
 cp conf/flask.json.default conf/flask.json
-cp docker-compose.yml.default docker-compose.yml
+cp docker-compose.dev.yml.default docker-compose.yml
 cp .env.default .env
+```
+
+正式模式：
+```bash
+cp conf/config.ini.default conf/config.ini
+cp conf/flask.json.default conf/flask.json
+cp docker-compose.prod.yml.default docker-compose.yml
+cp .env.default .env
+cp docker/nginx.conf.default docker/nginx.conf
 ```
 
 **2. 編輯 conf/flask.json，填入 SECRET_KEY**
@@ -194,9 +219,33 @@ cp .env.default .env
 ```env
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
 ```
 
-**4. 放入 SSH 私鑰（使用金鑰認證時）**
+**4. 設定 SSL 憑證（HTTPS）**
+
+將憑證放入 `docker/ssl/` 目錄：
+
+```bash
+mkdir -p docker/ssl
+cp /path/to/cert.pem docker/ssl/cert.pem
+cp /path/to/key.pem  docker/ssl/key.pem
+chmod 600 docker/ssl/key.pem
+```
+
+若尚無正式憑證，可先用 openssl 產生自簽憑證進行測試：
+
+```bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout docker/ssl/key.pem \
+  -out docker/ssl/cert.pem \
+  -subj "/CN=localhost"
+```
+
+若不使用 HTTPS，可編輯 `docker/nginx.conf`，移除 443 server 區塊，並將 80 server 的 `return 301` 改回 `proxy_pass`。
+
+**5. 放入 SSH 私鑰（使用金鑰認證時）**
 
 將私鑰複製至專案目錄下的 `ssh/` 資料夾，路徑填入各主機的憑證設定中（後台 → 主機管理 → 新增/編輯主機 → SSH 私鑰路徑）。
 
@@ -208,7 +257,7 @@ chmod 600 ssh/id_rsa
 
 也可使用後台的「SSH 金鑰產生」工具直接在服務端產生金鑰對。
 
-**5. 編輯 conf/config.ini，將 MONGO_URI 指向容器內的 MongoDB**
+**6. 編輯 conf/config.ini，將 MONGO_URI 指向容器內的 MongoDB**
 
 ```ini
 [MONGO]
@@ -216,24 +265,24 @@ MONGO_URI=mongodb://mongo:27017
 MONGO_DB=container_tool
 ```
 
-**6. 啟動服務**
+**7. 啟動服務**
 
 ```bash
 docker-compose up -d
 ```
 
-**7. 開啟後台**
+**8. 開啟後台**
 
 首次啟動會自動建立預設帳號 `admin / admin`，請登入後立即修改密碼。
 
 ```
-http://127.0.0.1:${FLASK_PORT}/admin/
+https://<SERVER_IP>/admin/
 ```
 
-**8. 開啟 Swagger UI 確認 API 文件**
+**9. 開啟 Swagger UI 確認 API 文件**
 
 ```
-http://127.0.0.1:${FLASK_PORT}/apidocs
+https://<SERVER_IP>/apidocs
 ```
 
 **常用指令**
@@ -241,6 +290,9 @@ http://127.0.0.1:${FLASK_PORT}/apidocs
 ```bash
 # 查看服務狀態
 docker-compose ps
+
+# 查看 nginx log
+docker-compose logs -f nginx
 
 # 查看 app log
 docker-compose logs -f app
@@ -489,6 +541,9 @@ curl -X POST http://127.0.0.1:5000/host/<host_id>/containers/batch-restart \
 | 方法 | 路徑 | 權限 | 說明 |
 |------|------|------|------|
 | POST | `/tool/generate-ssh-key` | admin | 產生 RSA 4096-bit SSH 金鑰對 |
+| GET  | `/tool/ssh-keys`         | admin | 列出 `ssh/` 目錄下所有公鑰 |
+
+#### 產生金鑰
 
 ```bash
 curl -X POST http://127.0.0.1:5000/tool/generate-ssh-key \
@@ -508,7 +563,29 @@ curl -X POST http://127.0.0.1:5000/tool/generate-ssh-key \
 }
 ```
 
-將回傳的 `public_key` 加入遠端主機的 `~/.ssh/authorized_keys`，並在主機憑證設定中填入對應的 `private_key_path`。
+#### 列出公鑰
+
+```bash
+curl http://127.0.0.1:5000/tool/ssh-keys \
+  -H "Authorization: Bearer <token>"
+```
+
+回應：
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "id_rsa",
+      "public_key": "ssh-rsa AAAA...",
+      "private_key_path": "ssh/id_rsa",
+      "public_key_path": "ssh/id_rsa.pub"
+    }
+  ]
+}
+```
+
+將公鑰加入遠端主機的 `~/.ssh/authorized_keys`，並在主機憑證設定中填入對應的 `private_key_path`。
 
 ---
 
@@ -603,22 +680,27 @@ python main.py --gen-secret-key --force
 ```env
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
 ```
 
 | 欄位 | 說明 | 預設值 |
 |------|------|--------|
-| `FLASK_PORT` | Flask 監聽 port，docker-compose 的 port mapping 也會同步套用 | `5000` |
+| `FLASK_PORT` | Flask 監聽 port（測試模式直接對外使用） | `5000` |
 | `JWT_ACCESS_TOKEN_EXPIRES_HOURS` | JWT token 有效期（小時） | `8` |
+| `NGINX_HTTP_PORT` | nginx HTTP port（正式模式） | `80` |
+| `NGINX_HTTPS_PORT` | nginx HTTPS port（正式模式） | `443` |
 
 ---
 
 ## 建議注意事項
 
-- `conf/flask.json`、`conf/config.ini`、`.env`、`ssh/` 含有敏感資訊，請勿提交至版本控制。
+- `conf/flask.json`、`conf/config.ini`、`.env`、`ssh/`、`docker/nginx.conf`、`docker/ssl/` 含有敏感資訊，請勿提交至版本控制（已加入 `.gitignore`）。
 - `SECRET_KEY` 請使用足夠長的隨機字串，正式環境務必更換。
 - `run.py` 使用 `TestingConfig` 啟動，預設 `debug=True`，僅適用於開發環境；正式部署請改用生產設定並關閉 debug 模式。
-- 正式部署建議使用 gunicorn 搭配 nginx 作為反向代理。
+- 正式部署請使用 `docker-compose.prod.yml.default` 範本，透過 nginx 反向代理並啟用 SSL。
 - 主機的 `credential_reboot.ssh_password` 與 `credential_restart.ssh_password` 欄位以明文存入 MongoDB，正式環境建議加密儲存或改用 SSH 金鑰認證。
+- SSL 私鑰（`docker/ssl/key.pem`）的存取權限建議設為 `0600`。
 - SSH 私鑰（`ssh/` 目錄）的存取權限為 `0600`，請確保容器或主機的檔案權限設定正確。
 
 ---
@@ -634,21 +716,109 @@ JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 **使用方式：**
 
 ```bash
-# 建立帳號並寫入公鑰（在遠端主機以 root 身份執行）
-sudo bash script/restricted_ssh_user.sh -u testuser -k "ssh-rsa AAAA..."
+# 只允許 docker 容器操作（ps / inspect / restart / logs）
+sudo bash script/restricted_ssh_user.sh -u restart_user -k "ssh-rsa AAAA..." --allow docker
+
+# 只允許重開機
+sudo bash script/restricted_ssh_user.sh -u reboot_user -k "ssh-rsa AAAA..." --allow reboot
+
+# 同時允許 docker 與重開機（預設）
+sudo bash script/restricted_ssh_user.sh -u full_user -k "ssh-rsa AAAA..." --allow docker,reboot
 
 # 先建帳號，之後手動補公鑰
-sudo bash script/restricted_ssh_user.sh -u testuser
+sudo bash script/restricted_ssh_user.sh -u testuser --allow docker
 ```
 
 | 參數 | 說明 | 預設值 |
 |------|------|--------|
 | `-u`, `--user` | 帳號名稱 | `dockerop` |
 | `-k`, `--key` | SSH 公鑰，可多次指定 | 無 |
+| `-a`, `--allow` | 允許的指令類別，逗號分隔：`docker`、`reboot` | `docker,reboot` |
+
+`--allow` 值說明：
+
+| 值 | 允許執行 |
+|----|---------|
+| `docker` | `docker ps`、`docker inspect`、`docker restart`、`docker logs` |
+| `reboot` | `reboot` |
+| `docker,reboot` | 以上全部 |
 
 **連線測試（指令帶在 ssh 後面）：**
 
 ```bash
-ssh testuser@your-server-ip docker ps
-ssh testuser@your-server-ip docker restart <容器名>
+# docker 操作
+ssh restart_user@your-server-ip docker ps
+ssh restart_user@your-server-ip docker restart <容器名>
+ssh restart_user@your-server-ip docker logs <容器名>
+
+# 主機重開機
+ssh reboot_user@your-server-ip reboot
+```
+
+---
+
+## nginx 設定
+
+### 啟動模式
+
+| 模式 | compose 範本 | nginx |
+|------|-------------|-------|
+| 測試 | `docker-compose.dev.yml.default` | 無，Flask 直接對外 |
+| 正式 | `docker-compose.prod.yml.default` | 有，反向代理 + SSL |
+
+### docker/nginx.conf.default
+
+預設設定包含：
+
+- **HTTP（port 80）** → 301 強制轉址至 HTTPS
+- **HTTPS（port 443）** → 反向代理至 `http://app:5000`
+- SSL 協議：TLSv1.2、TLSv1.3
+- 傳遞 `X-Real-IP`、`X-Forwarded-For`、`X-Forwarded-Proto` header
+
+### 憑證放置
+
+```
+docker/ssl/
+├── cert.pem    ← 憑證（含中繼憑證鏈）
+└── key.pem     ← 私鑰
+```
+
+```bash
+mkdir -p docker/ssl
+cp /path/to/cert.pem docker/ssl/cert.pem
+cp /path/to/key.pem  docker/ssl/key.pem
+chmod 600 docker/ssl/key.pem
+```
+
+自簽憑證（測試用）：
+
+```bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout docker/ssl/key.pem \
+  -out docker/ssl/cert.pem \
+  -subj "/CN=localhost"
+```
+
+### 修改 server_name
+
+編輯 `docker/nginx.conf`，將 `server_name _` 替換為實際域名：
+
+```nginx
+server_name example.com;
+```
+
+### 僅使用 HTTP（不啟用 SSL）
+
+編輯 `docker/nginx.conf`，移除 443 server 區塊，並將 80 server 改為：
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://app:5000;
+        ...
+    }
+}
 ```

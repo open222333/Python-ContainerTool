@@ -89,6 +89,8 @@
       }
       .btn { min-height: 2.5rem; }
       .table td, .table th { padding: .65rem .5rem; }
+      .form-select { font-size: 1rem !important; min-height: 2.5rem; }
+      .form-select option { font-size: 1rem !important; }
     }
   </style>
 </head>
@@ -184,6 +186,17 @@
 
         <div id="hosts-alert" class="alert d-none py-2"></div>
 
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-sm-6">
+            <input type="search" class="form-control" id="filter-host-name"
+              placeholder="名稱…" oninput="filterHosts()">
+          </div>
+          <div class="col-12 col-sm-6">
+            <input type="search" class="form-control" id="filter-host-ip"
+              placeholder="IP…" oninput="filterHosts()">
+          </div>
+        </div>
+
         <div class="card shadow-sm border-0">
           <div class="card-body p-0">
             <div style="overflow-x:auto">
@@ -215,6 +228,21 @@
 
         <div id="users-alert" class="alert d-none py-2"></div>
 
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-sm-6">
+            <input type="search" class="form-control" id="filter-user-username"
+              placeholder="帳號…" oninput="filterUsers()">
+          </div>
+          <div class="col-12 col-sm-6">
+            <select class="form-select" id="filter-user-role" onchange="filterUsers()">
+              <option value="">全部角色</option>
+              <option value="admin">管理員</option>
+              <option value="operator">操作員</option>
+              <option value="viewer">檢視者</option>
+            </select>
+          </div>
+        </div>
+
         <div class="card shadow-sm border-0">
           <div class="card-body p-0">
             <div style="overflow-x:auto">
@@ -243,6 +271,28 @@
           <button class="btn btn-outline-secondary btn-sm" onclick="loadLogs()">
             <i class="bi bi-arrow-clockwise me-1"></i>重新整理
           </button>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-sm-3">
+            <input type="search" class="form-control" id="filter-log-username"
+              placeholder="操作者…" oninput="filterLogs()">
+          </div>
+          <div class="col-6 col-sm-3">
+            <input type="search" class="form-control" id="filter-log-host"
+              placeholder="主機…" oninput="filterLogs()">
+          </div>
+          <div class="col-6 col-sm-3">
+            <input type="search" class="form-control" id="filter-log-container"
+              placeholder="容器…" oninput="filterLogs()">
+          </div>
+          <div class="col-6 col-sm-3">
+            <select class="form-select" id="filter-log-success" onchange="filterLogs()">
+              <option value="">全部結果</option>
+              <option value="true">成功</option>
+              <option value="false">失敗</option>
+            </select>
+          </div>
         </div>
 
         <div class="card shadow-sm border-0">
@@ -276,6 +326,25 @@
             <i class="bi bi-arrow-clockwise me-1"></i>重新整理
           </button>
         </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-sm-4">
+            <input type="search" class="form-control" id="filter-reboot-username"
+              placeholder="操作者…" oninput="filterRebootLogs()">
+          </div>
+          <div class="col-12 col-sm-4">
+            <input type="search" class="form-control" id="filter-reboot-host"
+              placeholder="主機…" oninput="filterRebootLogs()">
+          </div>
+          <div class="col-12 col-sm-4">
+            <select class="form-select" id="filter-reboot-success" onchange="filterRebootLogs()">
+              <option value="">全部結果</option>
+              <option value="true">成功</option>
+              <option value="false">失敗</option>
+            </select>
+          </div>
+        </div>
+
         <div class="card shadow-sm border-0">
           <div class="card-body p-0">
             <div style="overflow-x:auto">
@@ -361,6 +430,28 @@
             </div>
           </div>
         </div>
+
+        <!-- SSH Key List -->
+        <div class="mt-4">
+          <div class="card shadow-sm border-0">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-semibold mb-0"><i class="bi bi-list-ul me-1 text-primary"></i>已有公鑰</h6>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadSshKeys()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>重新整理
+                </button>
+              </div>
+              <div class="mb-3">
+                <input type="search" class="form-control" id="search-ssh-keys"
+                  placeholder="搜尋金鑰名稱…" oninput="filterSshKeys(this.value)">
+              </div>
+              <div id="ssh-key-list">
+                <div class="text-center text-muted py-3 small">載入中...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div><!-- /content-area -->
@@ -747,7 +838,7 @@ function renderHosts() {
     return;
   }
   tbody.innerHTML = hostsData.map(h => `
-    <tr>
+    <tr data-filterable data-name="${escAttr((h.name||'').toLowerCase())}" data-host="${escAttr((h.host||'').toLowerCase())}">
       <td class="ps-3 fw-semibold">${escHtml(h.name)}</td>
       <td><code>${escHtml(h.host)}</code></td>
       <td class="pe-3">
@@ -1045,10 +1136,115 @@ function switchTab(tab) {
     document.getElementById(`nav-${t}`).classList.toggle('active', tab === t);
   });
   closeSidebar();
+  // 切換時清空目的頁籤所有篩選欄
+  const tabFilters = {
+    'hosts':       ['filter-host-name', 'filter-host-ip'],
+    'users':       ['filter-user-username', 'filter-user-role'],
+    'logs':        ['filter-log-username', 'filter-log-host', 'filter-log-container', 'filter-log-success'],
+    'reboot-logs': ['filter-reboot-username', 'filter-reboot-host', 'filter-reboot-success'],
+    'tools':       ['search-ssh-keys'],
+  };
+  (tabFilters[tab] || []).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   if (tab === 'hosts') loadHosts();
   else if (tab === 'users') loadUsers();
   else if (tab === 'logs') loadLogs();
   else if (tab === 'reboot-logs') loadRebootLogs();
+  else if (tab === 'tools') loadSshKeys();
+}
+
+// --- Search / Filter ---
+function _applyFilter(tbodyId, colspan, predicate) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr[data-filterable]'));
+  if (!rows.length) return;
+  let visible = 0;
+  rows.forEach(tr => {
+    const show = predicate(tr);
+    tr.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  let noRow = tbody.querySelector('tr.no-result-row');
+  if (visible === 0) {
+    if (!noRow) {
+      noRow = document.createElement('tr');
+      noRow.className = 'no-result-row';
+      noRow.innerHTML = `<td colspan="${colspan}" class="text-center py-4 text-muted">無符合結果</td>`;
+      tbody.appendChild(noRow);
+    }
+  } else if (noRow) {
+    noRow.remove();
+  }
+}
+
+function filterHosts() {
+  const name = document.getElementById('filter-host-name').value.trim().toLowerCase();
+  const ip   = document.getElementById('filter-host-ip').value.trim().toLowerCase();
+  _applyFilter('hosts-tbody', 3, tr =>
+    (!name || tr.dataset.name.includes(name)) &&
+    (!ip   || tr.dataset.host.includes(ip))
+  );
+}
+
+function filterUsers() {
+  const username = document.getElementById('filter-user-username').value.trim().toLowerCase();
+  const role     = document.getElementById('filter-user-role').value;
+  _applyFilter('users-tbody', 4, tr =>
+    (!username || tr.dataset.username.includes(username)) &&
+    (!role     || tr.dataset.role === role)
+  );
+}
+
+function filterLogs() {
+  const username  = document.getElementById('filter-log-username').value.trim().toLowerCase();
+  const host      = document.getElementById('filter-log-host').value.trim().toLowerCase();
+  const container = document.getElementById('filter-log-container').value.trim().toLowerCase();
+  const success   = document.getElementById('filter-log-success').value;
+  _applyFilter('logs-tbody', 6, tr =>
+    (!username  || tr.dataset.username.includes(username)) &&
+    (!host      || tr.dataset.host.includes(host)) &&
+    (!container || tr.dataset.container.includes(container)) &&
+    (!success   || tr.dataset.success === success)
+  );
+}
+
+function filterRebootLogs() {
+  const username = document.getElementById('filter-reboot-username').value.trim().toLowerCase();
+  const host     = document.getElementById('filter-reboot-host').value.trim().toLowerCase();
+  const success  = document.getElementById('filter-reboot-success').value;
+  _applyFilter('reboot-logs-tbody', 5, tr =>
+    (!username || tr.dataset.username.includes(username)) &&
+    (!host     || tr.dataset.host.includes(host)) &&
+    (!success  || tr.dataset.success === success)
+  );
+}
+
+function filterSshKeys(query) {
+  const el = document.getElementById('ssh-key-list');
+  if (!el) return;
+  const q = query.trim().toLowerCase();
+  const items = Array.from(el.querySelectorAll('.border.rounded'));
+  if (!items.length) return;
+  let visible = 0;
+  items.forEach(item => {
+    const match = !q || item.textContent.toLowerCase().includes(q);
+    item.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  let noResult = el.querySelector('.no-result-keys');
+  if (visible === 0 && q) {
+    if (!noResult) {
+      noResult = document.createElement('div');
+      noResult.className = 'no-result-keys text-center text-muted py-3 small';
+      noResult.textContent = '無符合結果';
+      el.appendChild(noResult);
+    }
+  } else if (noResult) {
+    noResult.remove();
+  }
 }
 
 // --- Users ---
@@ -1078,7 +1274,7 @@ function renderUsers() {
     const createdAt = u.created_at ? new Date(u.created_at).toLocaleString('zh-TW') : '—';
     const roleBadge = `<span class="badge bg-${roleColors[u.role] || 'secondary'}">${roleLabels[u.role] || u.role}</span>`;
     return `
-      <tr>
+      <tr data-filterable data-username="${escAttr((u.username||'').toLowerCase())}" data-role="${escAttr(u.role||'')}">
         <td class="ps-3 fw-semibold">
           ${escHtml(u.username)}
           ${isSelf ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">自己</span>' : ''}
@@ -1257,7 +1453,10 @@ async function loadRebootLogs() {
       ? '<span class="badge bg-success">成功</span>'
       : '<span class="badge bg-danger">失敗</span>';
     return `
-      <tr>
+      <tr data-filterable
+          data-username="${escAttr((l.username||'').toLowerCase())}"
+          data-host="${escAttr(((l.host_name||'')+' '+(l.host_ip||'')).toLowerCase())}"
+          data-success="${l.success}">
         <td class="ps-3 text-muted small">${time}</td>
         <td class="fw-semibold">${escHtml(l.username)}</td>
         <td><code>${escHtml(l.host_name)}</code> <small class="text-muted">${escHtml(l.host_ip)}</small></td>
@@ -1286,7 +1485,11 @@ async function loadLogs() {
       ? '<span class="badge bg-success">成功</span>'
       : '<span class="badge bg-danger">失敗</span>';
     return `
-      <tr>
+      <tr data-filterable
+          data-username="${escAttr((l.username||'').toLowerCase())}"
+          data-host="${escAttr(((l.host_name||'')+' '+(l.host_ip||'')).toLowerCase())}"
+          data-container="${escAttr((l.container_name||'').toLowerCase())}"
+          data-success="${l.success}">
         <td class="ps-3 text-muted small">${time}</td>
         <td class="fw-semibold">${escHtml(l.username)}</td>
         <td><code>${escHtml(l.host_name)}</code> <small class="text-muted">${escHtml(l.host_ip)}</small></td>
@@ -1299,6 +1502,58 @@ async function loadLogs() {
 }
 
 // --- SSH Key Tool ---
+let sshKeysList = [];
+
+async function loadSshKeys() {
+  const el = document.getElementById('ssh-key-list');
+  if (!el) return;
+  el.innerHTML = '<div class="text-center text-muted py-3 small">載入中...</div>';
+  try {
+    const res = await apiFetch('/tool/ssh-keys');
+    if (!res) return;
+    const data = await res.json();
+    sshKeysList = data.data || [];
+    if (!sshKeysList.length) {
+      el.innerHTML = '<div class="text-center text-muted py-3 small">尚無金鑰</div>';
+      return;
+    }
+    el.innerHTML = sshKeysList.map((k, i) => `
+      <div class="border rounded p-3 mb-2">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+          <span class="fw-semibold small"><i class="bi bi-key me-1 text-warning"></i>${escHtml(k.name)}</span>
+          <button class="btn btn-sm btn-outline-secondary flex-shrink-0" onclick="copySshKey(${i}, this)">
+            <i class="bi bi-copy me-1"></i>複製公鑰
+          </button>
+        </div>
+        <div class="font-monospace text-muted text-truncate" style="font-size:.72rem">${escHtml(k.public_key)}</div>
+        <div class="mt-1 small">
+          <span class="badge bg-secondary"><i class="bi bi-lock me-1"></i>私鑰路徑</span>
+          <code class="text-danger">${escHtml(k.private_key_path)}</code>
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    el.innerHTML = '<div class="text-danger small py-2">載入失敗</div>';
+  }
+}
+
+async function copySshKey(idx, btn) {
+  const key = sshKeysList[idx];
+  if (!key) return;
+  const orig = btn.innerHTML;
+  try {
+    await navigator.clipboard.writeText(key.public_key);
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>已複製';
+    btn.classList.replace('btn-outline-secondary', 'btn-success');
+    setTimeout(() => {
+      btn.innerHTML = orig;
+      btn.classList.replace('btn-success', 'btn-outline-secondary');
+    }, 2000);
+  } catch {
+    prompt('請手動複製公鑰：', key.public_key);
+  }
+}
+
 async function generateSshKey() {
   const btn = document.getElementById('btn-gen-ssh-key');
   const alertEl = document.getElementById('ssh-key-alert');
@@ -1323,6 +1578,7 @@ async function generateSshKey() {
       document.getElementById('ssh-key-privpath').textContent = data.private_key_path || '';
       document.getElementById('ssh-key-result-card').style.display = '';
       document.getElementById('ssh-key-placeholder-card').style.display = 'none';
+      loadSshKeys();
     }
 
     if (data.success) {

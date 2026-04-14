@@ -123,3 +123,38 @@ def generate_ssh_key():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': f'產生失敗：{str(e)}'}), 500
+
+
+@app_tool.route('/ssh-keys', methods=['GET'])
+@jwt_required()
+@require_role('admin')
+def list_ssh_keys():
+    """
+    列出已產生的 SSH 公鑰清單
+    ---
+    tags:
+      - Tool
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: 公鑰清單
+    """
+    keys = []
+    if exists(SSH_DIR):
+        for fname in sorted(os.listdir(SSH_DIR)):
+            if fname.endswith('.pub'):
+                pub_path = join(SSH_DIR, fname)
+                try:
+                    with open(pub_path, 'r') as f:
+                        content = f.read().strip()
+                    name = fname[:-4]
+                    keys.append({
+                        'name': name,
+                        'public_key': content,
+                        'private_key_path': join(SSH_DIR, name),
+                        'public_key_path': pub_path,
+                    })
+                except Exception:
+                    pass
+    return jsonify({'success': True, 'data': keys})
