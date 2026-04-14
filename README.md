@@ -65,8 +65,8 @@ Python-ContainerTool/
 │   ├── nginx.conf.default          # nginx 設定範本（HTTP→HTTPS 轉址 + 反向代理）
 │   ├── nginx.conf                  # 實際 nginx 設定（從 .default 複製後修改，不納入 git）
 │   └── ssl/                        # SSL 憑證目錄（不納入 git）
-│       ├── cert.pem                #   憑證（含中繼憑證鏈）
-│       └── key.pem                 #   私鑰
+│       ├── fullchain.pem           #   憑證（含中繼憑證鏈），可為 symlink
+│       └── privkey.pem             #   私鑰，可為 symlink
 ├── script/
 │   ├── restricted_ssh_user.sh      # 建立受限 SSH 用戶 dockerop
 │   └── allowed_commands.sh         # dockerop 允許執行的指令白名單
@@ -125,7 +125,9 @@ cp conf/flask.json.default conf/flask.json
 cp .env.default .env
 ```
 
-**2. 編輯 conf/flask.json，填入 SECRET_KEY**
+**2. 編輯 conf/flask.json，填入 SECRET_KEY（選填）**
+
+> `SECRET_KEY` 若留空，啟動時會自動產生並寫入。正式環境建議手動指定固定值，避免服務重啟後 JWT token 全部失效。
 
 **3. 編輯 conf/config.ini，填入 MongoDB 連線資訊**
 
@@ -225,21 +227,32 @@ NGINX_HTTPS_PORT=443
 
 **4. 設定 SSL 憑證（HTTPS）**
 
-將憑證放入 `docker/ssl/` 目錄：
+建立 `docker/ssl/` 目錄，並以 symlink 指向 Let's Encrypt 憑證（推薦）：
 
 ```bash
 mkdir -p docker/ssl
-cp /path/to/cert.pem docker/ssl/cert.pem
-cp /path/to/key.pem  docker/ssl/key.pem
-chmod 600 docker/ssl/key.pem
+ln -sf /etc/letsencrypt/live/your-domain.com/fullchain.pem docker/ssl/fullchain.pem
+ln -sf /etc/letsencrypt/live/your-domain.com/privkey.pem   docker/ssl/privkey.pem
 ```
 
-若尚無正式憑證，可先用 openssl 產生自簽憑證進行測試：
+> `/etc/letsencrypt` 已透過 docker-compose 掛載至容器內，symlink 可正常解析。
+
+若使用其他 CA 憑證，直接複製：
 
 ```bash
+mkdir -p docker/ssl
+cp /path/to/fullchain.pem docker/ssl/fullchain.pem
+cp /path/to/privkey.pem   docker/ssl/privkey.pem
+chmod 600 docker/ssl/privkey.pem
+```
+
+自簽憑證（本機測試用）：
+
+```bash
+mkdir -p docker/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout docker/ssl/key.pem \
-  -out docker/ssl/cert.pem \
+  -keyout docker/ssl/privkey.pem \
+  -out docker/ssl/fullchain.pem \
   -subj "/CN=localhost"
 ```
 
@@ -700,7 +713,7 @@ NGINX_HTTPS_PORT=443
 - `run.py` 使用 `TestingConfig` 啟動，預設 `debug=True`，僅適用於開發環境；正式部署請改用生產設定並關閉 debug 模式。
 - 正式部署請使用 `docker-compose.prod.yml.default` 範本，透過 nginx 反向代理並啟用 SSL。
 - 主機的 `credential_reboot.ssh_password` 與 `credential_restart.ssh_password` 欄位以明文存入 MongoDB，正式環境建議加密儲存或改用 SSH 金鑰認證。
-- SSL 私鑰（`docker/ssl/key.pem`）的存取權限建議設為 `0600`。
+- SSL 私鑰（`docker/ssl/privkey.pem`）的存取權限建議設為 `0600`。
 - SSH 私鑰（`ssh/` 目錄）的存取權限為 `0600`，請確保容器或主機的檔案權限設定正確。
 
 ---
@@ -779,23 +792,36 @@ ssh reboot_user@your-server-ip reboot
 
 ```
 docker/ssl/
-├── cert.pem    ← 憑證（含中繼憑證鏈）
-└── key.pem     ← 私鑰
+├── fullchain.pem   ← 憑證（含中繼憑證鏈），可為 symlink
+└── privkey.pem     ← 私鑰，可為 symlink
 ```
+
+**Let's Encrypt（推薦）：**
 
 ```bash
 mkdir -p docker/ssl
-cp /path/to/cert.pem docker/ssl/cert.pem
-cp /path/to/key.pem  docker/ssl/key.pem
-chmod 600 docker/ssl/key.pem
+ln -sf /etc/letsencrypt/live/your-domain.com/fullchain.pem docker/ssl/fullchain.pem
+ln -sf /etc/letsencrypt/live/your-domain.com/privkey.pem   docker/ssl/privkey.pem
 ```
 
-自簽憑證（測試用）：
+> `/etc/letsencrypt` 已透過 docker-compose 掛載至容器內（`:ro`），symlink 可正常解析。
+
+**其他 CA 憑證：**
 
 ```bash
+mkdir -p docker/ssl
+cp /path/to/fullchain.pem docker/ssl/fullchain.pem
+cp /path/to/privkey.pem   docker/ssl/privkey.pem
+chmod 600 docker/ssl/privkey.pem
+```
+
+**自簽憑證（本機測試用）：**
+
+```bash
+mkdir -p docker/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout docker/ssl/key.pem \
-  -out docker/ssl/cert.pem \
+  -keyout docker/ssl/privkey.pem \
+  -out docker/ssl/fullchain.pem \
   -subj "/CN=localhost"
 ```
 

@@ -11,16 +11,20 @@ server {
 # ============================================================
 # HTTPS
 # 憑證放置位置（掛載至容器內 /etc/nginx/ssl/）：
-#   docker/ssl/cert.pem   — 憑證（含中繼憑證鏈）
-#   docker/ssl/key.pem    — 私鑰
+#   docker/ssl/fullchain.pem — 憑證（含中繼憑證鏈）
+#   docker/ssl/privkey.pem   — 私鑰
+#
+# 使用 Let's Encrypt 時，建議以 symlink 方式指向：
+#   /etc/letsencrypt/live/<domain>/fullchain.pem
+#   /etc/letsencrypt/live/<domain>/privkey.pem
 # ============================================================
 server {
     listen 443 ssl;
     server_name _;
 
     # SSL 憑證
-    ssl_certificate     /etc/nginx/ssl/cert.pem;
-    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
 
     # SSL 協議與加密套件
     ssl_protocols             TLSv1.2 TLSv1.3;
