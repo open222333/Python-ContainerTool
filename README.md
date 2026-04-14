@@ -221,8 +221,6 @@ cp docker/nginx.conf.default docker/nginx.conf
 ```env
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
-NGINX_HTTP_PORT=80
-NGINX_HTTPS_PORT=443
 ```
 
 **4. 設定 SSL 憑證（HTTPS）**
@@ -693,16 +691,12 @@ python main.py --gen-secret-key --force
 ```env
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
-NGINX_HTTP_PORT=80
-NGINX_HTTPS_PORT=443
 ```
 
 | 欄位 | 說明 | 預設值 |
 |------|------|--------|
 | `FLASK_PORT` | Flask 監聽 port（測試模式直接對外使用） | `5000` |
 | `JWT_ACCESS_TOKEN_EXPIRES_HOURS` | JWT token 有效期（小時） | `8` |
-| `NGINX_HTTP_PORT` | nginx HTTP port（正式模式） | `80` |
-| `NGINX_HTTPS_PORT` | nginx HTTPS port（正式模式） | `443` |
 
 ---
 
@@ -825,13 +819,31 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -subj "/CN=localhost"
 ```
 
-### 修改 server_name
+### 指定域名時的修改項目
 
-編輯 `docker/nginx.conf`，將 `server_name _` 替換為實際域名：
+編輯 `docker/nginx.conf`，**兩個 server 區塊都要修改** `server_name`：
 
 ```nginx
-server_name example.com;
+# HTTP → HTTPS 重定向（port 80）
+server {
+    listen 80;
+    server_name example.com;   # ← 改這裡
+
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS（port 443）
+server {
+    listen 443 ssl;
+    server_name example.com;   # ← 改這裡
+
+    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+    ...
+}
 ```
+
+> `server_name _` 是萬用匹配（任何 hostname 都接受）。指定正式域名後，nginx 只會回應該域名的請求，其他 hostname 會被拒絕。
 
 ### 僅使用 HTTP（不啟用 SSL）
 
