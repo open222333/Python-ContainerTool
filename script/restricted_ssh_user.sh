@@ -218,8 +218,9 @@ else
     echo "    ✓ 已寫入 ${#SSH_KEYS[@]} 把公鑰"
 fi
 
-chmod 600 "${AUTH_KEYS}"
-chown root:root "${AUTH_KEYS}"   # root 所有，防止用戶竄改
+chmod 400 "${AUTH_KEYS}"
+chown "${RESTRICTED_USER}:${RESTRICTED_GROUP}" "${AUTH_KEYS}"
+# 400 唯讀（用戶本人可讀，不可寫），符合 StrictModes 對 authorized_keys 的 owner 要求
 
 ### ── 6. 設定 sshd_config ──────────────────────────────────
 echo "[6] 設定 sshd_config..."
