@@ -134,6 +134,7 @@ cp .env.default .env
 **4. 編輯 .env（選填）**
 
 ```env
+APP_PORT=5000
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 ```
@@ -219,6 +220,7 @@ cp docker/nginx.conf.default docker/nginx.conf
 **3. 編輯 .env（選填）**
 
 ```env
+APP_PORT=5000
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 ```
@@ -689,13 +691,15 @@ python main.py --gen-secret-key --force
 ### .env（從 .env.default 複製）
 
 ```env
+APP_PORT=5000
 FLASK_PORT=5000
 JWT_ACCESS_TOKEN_EXPIRES_HOURS=8
 ```
 
 | 欄位 | 說明 | 預設值 |
 |------|------|--------|
-| `FLASK_PORT` | Flask 監聽 port（測試模式直接對外使用） | `5000` |
+| `APP_PORT` | 對外開放的 port（測試模式 host 端） | `5000` |
+| `FLASK_PORT` | 容器內 Flask 監聽的 port | `5000` |
 | `JWT_ACCESS_TOKEN_EXPIRES_HOURS` | JWT token 有效期（小時） | `8` |
 
 ---

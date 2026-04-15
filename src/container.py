@@ -4,6 +4,17 @@ import os
 import time
 
 
+def _load_private_key(path: str):
+    """自動偵測金鑰類型並載入（RSA / Ed25519 / ECDSA / DSS）。"""
+    expanded = os.path.expanduser(path)
+    for key_cls in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey):
+        try:
+            return key_cls.from_private_key_file(expanded)
+        except paramiko.SSHException:
+            continue
+    raise paramiko.SSHException(f'無法載入私鑰：{path}（不支援的格式或金鑰損毀）')
+
+
 def _make_ssh_client(host, ssh_user, ssh_port, ssh_timeout, ssh_key_path, ssh_password):
     """建立並回傳已連線的 paramiko SSHClient。"""
     client = paramiko.SSHClient()
@@ -13,9 +24,11 @@ def _make_ssh_client(host, ssh_user, ssh_port, ssh_timeout, ssh_key_path, ssh_pa
         'port': ssh_port,
         'username': ssh_user,
         'timeout': ssh_timeout,
+        'look_for_keys': False,
+        'allow_agent': False,
     }
     if ssh_key_path:
-        kwargs['pkey'] = paramiko.RSAKey.from_private_key_file(os.path.expanduser(ssh_key_path))
+        kwargs['pkey'] = _load_private_key(ssh_key_path)
     elif ssh_password:
         kwargs['password'] = ssh_password
     else:
@@ -182,7 +195,7 @@ class ContainerTool:
         cmd = self._docker(f'inspect --format="{{{{.State.Status}}}}" {container_name}')
         try:
             client = self._connect()
-            stdin, stdout, stderr = client.exec_command(cmd)
+            _, stdout, _ = client.exec_command(cmd)
             stdout.channel.recv_exit_status()
             out = stdout.read().decode().strip()
             client.close()
@@ -206,7 +219,7 @@ class ContainerTool:
         )
         try:
             client = self._connect()
-            stdin, stdout, stderr = client.exec_command(cmd)
+            _, stdout, stderr = client.exec_command(cmd)
             exit_code = stdout.channel.recv_exit_status()
             out = stdout.read().decode().strip()
             err = stderr.read().decode().strip()
