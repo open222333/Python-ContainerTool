@@ -536,6 +536,50 @@
               </div>
             </div>
 
+            <!-- 列出容器帳號 -->
+            <div class="col-12">
+              <label class="form-label small fw-semibold mb-1">
+                <i class="bi bi-list-ul me-1 text-success"></i>列出容器帳號 <span class="text-danger">*</span>
+              </label>
+              <div class="border rounded p-2">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label small mb-1">SSH 使用者 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="list-ssh_user" placeholder="dockerop">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">SSH 私鑰路徑</label>
+                    <input type="text" class="form-control form-control-sm" id="list-ssh_key_path" placeholder="ssh/id_rsa">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small mb-1">SSH 密碼</label>
+                    <input type="password" class="form-control form-control-sm" id="list-ssh_password" autocomplete="new-password">
+                  </div>
+                  <div class="col-7">
+                    <div class="form-check mt-1">
+                      <input class="form-check-input" type="checkbox" id="list-is_root">
+                      <label class="form-check-label small" for="list-is_root">Root 帳號（不需 sudo）</label>
+                    </div>
+                  </div>
+                  <div class="col-5">
+                    <label class="form-label small mb-1">連線模式</label>
+                    <div class="input-group input-group-sm">
+                      <select class="form-select form-select-sm" id="list-conn_type">
+                        <option value="standard">標準 SSH</option>
+                        <option value="restricted">受限指令</option>
+                      </select>
+                      <button type="button" class="btn btn-outline-secondary conn-type-help"
+                              data-bs-toggle="popover" data-bs-placement="left" data-bs-trigger="click"
+                              data-bs-html="true" data-bs-title="受限指令模式"
+                              data-bs-content="&lt;small&gt;透過 &lt;code&gt;authorized_keys&lt;/code&gt; 的 &lt;code&gt;command=&lt;/code&gt; 限制帳號只能執行白名單指令，連線時無法取得互動式 shell。&lt;br&gt;&lt;br&gt;&lt;b&gt;差異：&lt;/b&gt;&lt;ul class='ps-3 mb-1'&gt;&lt;li&gt;每次操作只送一道指令&lt;/li&gt;&lt;li&gt;列容器只顯示執行中（&lt;code&gt;docker ps&lt;/code&gt; 無 -a）&lt;/li&gt;&lt;li&gt;重啟後不做狀態確認&lt;/li&gt;&lt;/ul&gt;&lt;b&gt;建立受限帳號：&lt;/b&gt;&lt;br&gt;&lt;code&gt;sudo bash script/restricted_ssh_user.sh -u dockerop -k &quot;ssh-rsa ...&quot;&lt;/code&gt;&lt;/small&gt;">
+                        <i class="bi bi-question-circle"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- 重啟容器帳號 -->
             <div class="col-12">
               <label class="form-label small fw-semibold mb-1">
@@ -862,8 +906,9 @@ function openAddHost() {
   document.getElementById('host-ssh_port').value = '22';
   document.getElementById('host-description').value = '';
   document.getElementById('host-form-error').classList.add('d-none');
-  _fillCred('reboot', {});
+  _fillCred('list', {});
   _fillCred('restart', {});
+  _fillCred('reboot', {});
   getHostModal().show();
 }
 
@@ -878,15 +923,17 @@ function openEditHost(id) {
   document.getElementById('host-description').value = h.description || '';
   document.getElementById('host-form-error').classList.add('d-none');
 
-  if (h.credential_reboot || h.credential_restart) {
-    _fillCred('reboot', h.credential_reboot);
+  if (h.credential_reboot || h.credential_restart || h.credential_list) {
+    _fillCred('list', h.credential_list);
     _fillCred('restart', h.credential_restart);
+    _fillCred('reboot', h.credential_reboot);
   } else {
     // 向下相容舊格式（credentials 陣列或平鋪欄位）
     const creds = h.credentials || [];
     const flat = { ssh_user: h.ssh_user, ssh_key_path: h.ssh_key_path, is_root: h.is_root !== false };
-    _fillCred('reboot', creds[0] || flat);
+    _fillCred('list', creds[0] || flat);
     _fillCred('restart', creds[1] || creds[0] || flat);
+    _fillCred('reboot', creds[0] || flat);
   }
   getHostModal().show();
 }
@@ -923,11 +970,12 @@ async function saveHost() {
   errEl.classList.add('d-none');
   btn.disabled = true;
 
-  const credential_reboot = _getCred('reboot');
+  const credential_list = _getCred('list');
   const credential_restart = _getCred('restart');
+  const credential_reboot = _getCred('reboot');
 
-  if (!credential_reboot.ssh_user) {
-    errEl.textContent = '重啟主機帳號的 SSH 使用者不得為空';
+  if (!credential_list.ssh_user) {
+    errEl.textContent = '列出容器帳號的 SSH 使用者不得為空';
     errEl.classList.remove('d-none');
     btn.disabled = false;
     return;
@@ -938,14 +986,21 @@ async function saveHost() {
     btn.disabled = false;
     return;
   }
+  if (!credential_reboot.ssh_user) {
+    errEl.textContent = '重啟主機帳號的 SSH 使用者不得為空';
+    errEl.classList.remove('d-none');
+    btn.disabled = false;
+    return;
+  }
 
   const payload = {
     name: document.getElementById('host-name').value,
     host: document.getElementById('host-host').value,
     ssh_port: parseInt(document.getElementById('host-ssh_port').value) || 22,
     description: document.getElementById('host-description').value,
-    credential_reboot,
+    credential_list,
     credential_restart,
+    credential_reboot,
   };
 
   try {
