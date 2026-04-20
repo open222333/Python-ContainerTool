@@ -1012,7 +1012,7 @@ async function saveHost() {
     const data = await res.json();
     if (data.success) {
       bootstrap.Modal.getInstance(document.getElementById('modal-host')).hide();
-      loadHosts();
+      await loadHosts();
     } else {
       errEl.textContent = data.message || '儲存失敗';
       errEl.classList.remove('d-none');
