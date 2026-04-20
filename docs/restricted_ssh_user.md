@@ -40,6 +40,8 @@ exec sudo docker restart nginx
 
 在**遠端主機**以 root 身份執行腳本。
 
+> ⚠️ **必須使用 `bash` 執行**，不可用 `sh`。腳本使用 bash 陣列、`[[ ]]`、`mapfile` 等語法，`sh` 不相容。
+
 ### 語法
 
 ```bash

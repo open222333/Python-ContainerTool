@@ -28,6 +28,11 @@
 #   no-port-forwarding,no-X11-forwarding ssh-rsa AAAA...
 # ============================================================
 
+if [ -z "$BASH_VERSION" ]; then
+    echo "❌ 請使用 bash 執行此腳本：sudo bash $0 $*" >&2
+    exit 1
+fi
+
 set -e
 
 if [[ $EUID -ne 0 ]]; then
